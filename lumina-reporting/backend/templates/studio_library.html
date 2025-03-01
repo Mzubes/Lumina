@@ -1,0 +1,15 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Studio Library - Lumina Reporting</title>
+</head>
+<body>
+    <h1>Studio Library</h1>
+    <p>Browse and configure pre-built reporting components for use across all your reports and digital assets.</p>
+    <ul>
+        {% for comp in components %}
+            <li><strong>{{ comp.name }}</strong>: {{ comp.description }}</li>
+        {% endfor %}
+    </ul>
+</body>
+</html>
