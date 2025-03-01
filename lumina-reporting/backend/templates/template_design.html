@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Template Designer - Lumina Reporting</title>
+    <style>
+      .container { display: flex; }
+      .sidebar { width: 20%; padding: 10px; border-right: 1px solid #ccc; }
+      .workspace { flex: 1; padding: 10px; border-right: 1px solid #ccc; }
+      .properties { width: 20%; padding: 10px; }
+      button { margin-right: 5px; }
+    </style>
+</head>
+<body>
+    <h1>Template Designer</h1>
+    <div>
+        <button>Save Template</button>
+        <button>Preview</button>
+        <button>Reset</button>
+    </div>
+    <div class="container">
+        <div class="sidebar">
+            <h3>Components</h3>
+            <ul>
+                <li>Holdings</li>
+                <li>Transactions</li>
+                <li>Performance</li>
+                <li>Charts</li>
+                <li>...</li>
+            </ul>
+        </div>
+        <div class="workspace">
+            <h3>Workspace</h3>
+            <p>Drag components here to arrange your layout...</p>
+        </div>
+        <div class="properties">
+            <h3>Properties</h3>
+            <p>Select a component to edit properties.</p>
+            <p>Title: <input type="text" placeholder="Component Title"></p>
+            <p>Format: <input type="text" placeholder="Format"></p>
+            <p>Conditional Logic: <input type="text" placeholder="Logic"></p>
+            <p>Data Binding: <input type="text" placeholder="Data Binding"></p>
+        </div>
+    </div>
+</body>
+</html>
