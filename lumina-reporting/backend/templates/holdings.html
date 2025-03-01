@@ -1,0 +1,10 @@
+<div class="report-component">
+  <h2>{{ title }}</h2>
+  <ul>
+    {% for holding in data %}
+      {% if holding.value > display_threshold %}
+        <li>{{ holding.name }}: {{ holding.value }}</li>
+      {% endif %}
+    {% endfor %}
+  </ul>
+</div>
