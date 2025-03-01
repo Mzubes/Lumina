@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Data Sources - Lumina Reporting</title>
+    <style>
+      table { width: 100%; border-collapse: collapse; }
+      th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
+      th { background-color: #f2f2f2; }
+      .toolbar { margin-bottom: 20px; }
+    </style>
+</head>
+<body>
+    <h1>Data Sources</h1>
+    <div class="toolbar">
+        <button>Add New Source</button>
+        <button>Refresh</button>
+        <button>Settings</button>
+    </div>
+    <table>
+        <tr>
+            <th>Source Name</th>
+            <th>Type</th>
+            <th>Status</th>
+            <th>Last Updated</th>
+            <th>Actions</th>
+        </tr>
+        <tr>
+            <td>Sales CSV</td>
+            <td>CSV</td>
+            <td>Online</td>
+            <td>10:30 AM</td>
+            <td><button>Edit</button> <button>Delete</button></td>
+        </tr>
+        <tr>
+            <td>Market API</td>
+            <td>API</td>
+            <td>Offline</td>
+            <td>9:45 AM</td>
+            <td><button>Edit</button> <button>Delete</button></td>
+        </tr>
+        <tr>
+            <td>Holdings DB</td>
+            <td>DB</td>
+            <td>Online</td>
+            <td>11:00 AM</td>
+            <td><button>Edit</button> <button>Delete</button></td>
+        </tr>
+    </table>
+    <p>Filter: [ All | Active | Inactive ]</p>
+</body>
+</html>
