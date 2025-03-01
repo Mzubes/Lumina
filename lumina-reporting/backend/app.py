@@ -6,8 +6,9 @@ from routes.approvals import approvals_blueprint
 from routes.distribution import distribution_blueprint
 
 app = Flask(__name__)
+app.config.from_object('config.Config')
 
-# Register blueprints (modular routing)
+# Register blueprints for modular routing
 app.register_blueprint(auth_blueprint)
 app.register_blueprint(data_hub_blueprint)
 app.register_blueprint(reports_blueprint)
