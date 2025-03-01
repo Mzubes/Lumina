@@ -4,13 +4,11 @@ from models import FundData
 
 data_hub_blueprint = Blueprint('data_hub', __name__)
 
-# Fetch all funds
 @data_hub_blueprint.route('/api/funds', methods=['GET'])
 def get_funds():
-    funds = FundData.query.all()
+    funds = db_session.query(FundData).all()
     return jsonify([fund.serialize() for fund in funds])
 
-# Add a new fund
 @data_hub_blueprint.route('/api/funds', methods=['POST'])
 def add_fund():
     data = request.json
