@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Institutional Report - Lumina Reporting</title>
+    <style>
+      body { font-family: Arial, sans-serif; margin: 20px; }
+      .component { margin-bottom: 20px; }
+    </style>
+</head>
+<body>
+    <h1>Institutional Report</h1>
+    {% for component in components %}
+        <div class="component">
+            {{ component | safe }}
+        </div>
+    {% endfor %}
+</body>
+</html>
