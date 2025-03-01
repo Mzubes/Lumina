@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Data Hub - Lumina Reporting</title>
+</head>
+<body>
+    <h1>Data Hub</h1>
+    <p>Review and integrate all your reporting data in one place.</p>
+    <h2>Funds</h2>
+    <ul>
+        {% for fund in data.funds %}
+            <li>{{ fund.name }} (AUM: {{ fund.aum }})</li>
+        {% endfor %}
+    </ul>
+</body>
+</html>
