@@ -7,6 +7,6 @@ def generate_pdf(data):
     pdf.cell(200, 10, txt="Fund Report", ln=True, align="C")
     for key, value in data.items():
         pdf.cell(200, 10, txt=f"{key}: {value}", ln=True)
-    filename = f"static/reports/report_{data['fund_id']}.pdf"
+    filename = f"static/reports/report_{data.get('fund_id', 'default')}.pdf"
     pdf.output(filename)
     return filename
