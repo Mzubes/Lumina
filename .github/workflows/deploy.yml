@@ -12,6 +12,6 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/configure-pages@v4
       - uses: actions/upload-pages-artifact@v3
-          with 
-            path:./lumina-reporting/frontend/src # Change to your build output directory
+        with:
+          path: ./lumina-reporting/frontend/src # Change to your build output directory
       - uses: actions/deploy-pages@v4
