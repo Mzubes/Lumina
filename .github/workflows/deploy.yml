@@ -2,12 +2,24 @@ name: Deploy to GitHub Pages
 
 on:
   push:
-    branches:
-      - main  # Or your default branch
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -15,10 +27,12 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'  # or your preferred Node version
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: lumina-reporting/frontend/package-lock.json
 
       - name: Install dependencies
-        run: npm install
+        run: npm ci
         working-directory: ./lumina-reporting/frontend
 
       - name: Build React app
@@ -34,4 +48,5 @@ jobs:
           path: ./lumina-reporting/frontend/build
 
       - name: Deploy to GitHub Pages
+        id: deployment
         uses: actions/deploy-pages@v4
