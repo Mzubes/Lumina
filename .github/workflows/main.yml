@@ -2,42 +2,41 @@ name: CI
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   pull_request:
-    branches: [ main ]
+    branches: [main]
+
+permissions:
+  contents: read
 
 jobs:
-  build:
+  frontend:
     runs-on: ubuntu-latest
-
+    defaults:
+      run:
+        working-directory: lumina-reporting/frontend
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      # Python setup and test
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.x'
-
-      - name: Install Python dependencies
-        run: |
-          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-
-      - name: Run Python tests
-        run: |
-          if [ -d tests ]; then pytest; fi
-
-      # Node.js setup and build (for JavaScript)
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: '20'
+          cache: npm
+          cache-dependency-path: lumina-reporting/frontend/package-lock.json
+      - run: npm ci
+      - run: npm run build
+      - run: npm test -- --watchAll=false --passWithNoTests
 
-      - name: Install Node.js dependencies
-        run: |
-          if [ -f package.json ]; then npm install; fi
-
-      - name: Run JavaScript tests
-        run: |
-          if [ -f package.json ]; then npm test; fi
+  backend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: lumina-reporting/backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: lumina-reporting/backend/requirements-dev.txt
+      - run: pip install -r requirements-dev.txt
+      - run: pytest

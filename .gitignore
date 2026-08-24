@@ -1,0 +1,11 @@
+node_modules/
+build/
+.venv/
+__pycache__/
+.pytest_cache/
+*.pyc
+*.sqlite
+*.db
+*.log
+.env
+lumina-reporting/backend/static/reports/*.pdf

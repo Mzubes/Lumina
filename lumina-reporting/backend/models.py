@@ -1,24 +1,21 @@
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy import Column, Integer, String, Binary
-from cryptography.fernet import Fernet
-import os
+from sqlalchemy.orm import declarative_base
+from sqlalchemy import Column, Integer, String
+from werkzeug.security import check_password_hash, generate_password_hash
 
 Base = declarative_base()
-# Initialize Fernet with the encryption key from environment/config
-fernet = Fernet(os.environ.get("ENCRYPTION_KEY", "default_key").encode())
 
 class User(Base):
     __tablename__ = 'users'
     id = Column(Integer, primary_key=True)
     email = Column(String(100), unique=True, nullable=False)
-    password = Column(Binary, nullable=False)
+    password_hash = Column(String(255), nullable=False)
     role = Column(String(20), nullable=False)
 
     def set_password(self, password):
-        self.password = fernet.encrypt(password.encode())
+        self.password_hash = generate_password_hash(password)
 
     def check_password(self, password):
-        return fernet.decrypt(self.password).decode() == password
+        return check_password_hash(self.password_hash, password)
 
 class FundData(Base):
     __tablename__ = 'fund_data'

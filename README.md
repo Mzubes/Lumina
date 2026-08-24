@@ -1,12 +1,47 @@
 # Lumina Reporting MVP
 
-Lumina Reporting is a modern, secure reporting solution for investment managers. This MVP includes:
+Lumina is an institutional reporting MVP with a React frontend and Flask API.
 
-- **User Authentication & RBAC** with JWT.
-- **Data Encryption** (AES-256 for sensitive data).
-- **Secure API Communication** (TLS 1.2/1.3).
-- **Core Modules**: Data Hub, Document Production Center, Template Editor, Email Distribution, and separate Internal/Client Portals.
-- **Dark Mode UI** with a modern design aesthetic.
+## Project layout
 
-## Directory Structure
+- `lumina-reporting/frontend` — React application deployed to GitHub Pages.
+- `lumina-reporting/backend` — Flask API intended for a Python application host.
+- `.github/workflows` — continuous integration and frontend deployment.
 
+GitHub Pages hosts only the static frontend. Configure `REACT_APP_API_BASE_URL` at
+frontend build time when the Flask API is deployed to a separate HTTPS host. Without
+that value, the frontend runs in a clearly labelled demo mode.
+
+## Run the frontend
+
+```bash
+cd lumina-reporting/frontend
+npm ci
+npm start
+```
+
+## Run the API
+
+```bash
+cd lumina-reporting/backend
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements-dev.txt
+flask --app app run
+```
+
+The development default uses SQLite. Production must set `SECRET_KEY`,
+`JWT_SECRET_KEY`, `DATABASE_URL`, and `CORS_ORIGINS`.
+
+Create an initial user with:
+
+```bash
+flask --app app create-user --email admin@example.com --role admin
+```
+
+## Verification
+
+```bash
+cd lumina-reporting/frontend && npm run build
+cd ../backend && pytest
+```
