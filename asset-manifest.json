@@ -1,0 +1,11 @@
+{
+  "files": {
+    "main.css": "/Lumina/static/css/main.38e91e4f.css",
+    "main.js": "/Lumina/static/js/main.4e764e56.js",
+    "index.html": "/Lumina/index.html"
+  },
+  "entrypoints": [
+    "static/css/main.38e91e4f.css",
+    "static/js/main.4e764e56.js"
+  ]
+}
