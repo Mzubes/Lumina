@@ -20,6 +20,8 @@ def test_dashboard_returns_data(client, auth_headers, sample_client):
     assert response.status_code == 200
     body = response.get_json()
     assert body['pendingApprovals'] == 1
+    assert body['totalReports'] == 1
+    assert body['reportsByStatus'] == {'draft': 0, 'review': 1, 'approved': 0, 'distributed': 0}
     assert body['recentReports'][0]['name'] == 'Pending Review Report'
 
 def test_fund_round_trip(client, auth_headers):

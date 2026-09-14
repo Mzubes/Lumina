@@ -8,11 +8,19 @@ import Reports from './components/reports';
 import Templates from './components/templates';
 import Login from './pages/Login';
 import ClientPortal from './pages/ClientPortal';
+import {
+  IconCheckCircle, IconDashboard, IconDatabase, IconDocument,
+  IconLayout, IconLogIn, IconPlug, IconUsers,
+} from './icons';
 
 const navItems = [
-  ['/', 'Dashboard'], ['/data-hub', 'Data Hub'], ['/data-sources', 'Data Sources'],
-  ['/templates', 'Templates'], ['/reports', 'Reports'], ['/approvals', 'Approvals'],
-  ['/client-portal', 'Client Portal'],
+  ['/', 'Dashboard', IconDashboard],
+  ['/data-hub', 'Data Hub', IconDatabase],
+  ['/data-sources', 'Data Sources', IconPlug],
+  ['/templates', 'Templates', IconLayout],
+  ['/reports', 'Reports', IconDocument],
+  ['/approvals', 'Approvals', IconCheckCircle],
+  ['/client-portal', 'Client Portal', IconUsers],
 ];
 
 function App() {
@@ -20,12 +28,21 @@ function App() {
     <HashRouter>
       <div className="app-shell">
         <aside className="sidebar">
-          <div className="brand">Lumina</div>
-          <div className="brand-subtitle">Institutional Reporting</div>
-          <nav>{navItems.map(([to, label]) => (
-            <NavLink key={to} to={to} end={to === '/'}>{label}</NavLink>
+          <div className="brand-row">
+            <div className="brand-mark">L</div>
+            <div>
+              <div className="brand">Lumina</div>
+              <div className="brand-subtitle">Institutional Reporting</div>
+            </div>
+          </div>
+          <nav>{navItems.map(([to, label, Icon]) => (
+            <NavLink key={to} to={to} end={to === '/'}>
+              <Icon /><span>{label}</span>
+            </NavLink>
           ))}</nav>
-          <NavLink className="login-link" to="/login">Sign in</NavLink>
+          <NavLink className="login-link" to="/login">
+            <IconLogIn /><span>Sign in</span>
+          </NavLink>
         </aside>
         <main className="main-content">
           <Routes>
