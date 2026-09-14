@@ -4,11 +4,9 @@ from flask_cors import CORS
 
 from database import configure_database, db_session, init_db, shutdown_session
 from models import User
-from routes.approvals import approvals_blueprint
 from routes.auth import auth_blueprint
 from routes.dashboard import dashboard_blueprint
 from routes.data_hub import data_hub_blueprint
-from routes.distribution import distribution_blueprint
 from routes.reports import reports_blueprint
 
 def create_app(test_config=None):
@@ -26,8 +24,6 @@ def create_app(test_config=None):
     app.register_blueprint(dashboard_blueprint)
     app.register_blueprint(data_hub_blueprint)
     app.register_blueprint(reports_blueprint)
-    app.register_blueprint(approvals_blueprint)
-    app.register_blueprint(distribution_blueprint)
 
     @app.get('/api/health')
     def health():
@@ -35,13 +31,16 @@ def create_app(test_config=None):
 
     @app.cli.command('create-user')
     @click.option('--email', prompt=True)
-    @click.option('--role', type=click.Choice(['admin', 'editor', 'viewer']), default='admin')
+    @click.option('--role', type=click.Choice(['admin', 'editor', 'viewer', 'client']), default='admin')
+    @click.option('--client-id', type=int, default=None, help="Required when --role client.")
     @click.password_option()
-    def create_user(email, role, password):
+    def create_user(email, role, client_id, password):
         normalized_email = email.strip().lower()
+        if role == 'client' and client_id is None:
+            raise click.ClickException('--client-id is required when --role client.')
         if db_session.query(User).filter_by(email=normalized_email).first():
             raise click.ClickException('A user with that email already exists.')
-        user = User(email=normalized_email, role=role)
+        user = User(email=normalized_email, client_id=client_id, role=role)
         user.set_password(password)
         db_session.add(user)
         db_session.commit()

@@ -1,7 +1,6 @@
 import React from 'react';
 import { HashRouter, NavLink, Navigate, Route, Routes } from 'react-router-dom';
 import Dashboard from './components/Dashboard';
-import Distribution from './components/Distribution';
 import Approvals from './components/approvals';
 import DataHub from './components/datahub';
 import Reports from './components/reports';
@@ -10,8 +9,7 @@ import ClientPortal from './pages/ClientPortal';
 
 const navItems = [
   ['/', 'Dashboard'], ['/data-hub', 'Data Hub'], ['/reports', 'Reports'],
-  ['/approvals', 'Approvals'], ['/distribution', 'Distribution'],
-  ['/client-portal', 'Client Portal'],
+  ['/approvals', 'Approvals'], ['/client-portal', 'Client Portal'],
 ];
 
 function App() {
@@ -32,7 +30,7 @@ function App() {
             <Route path="/data-hub" element={<DataHub />} />
             <Route path="/reports" element={<Reports />} />
             <Route path="/approvals" element={<Approvals />} />
-            <Route path="/distribution" element={<Distribution />} />
+            <Route path="/distribution" element={<Navigate to="/reports" replace />} />
             <Route path="/client-portal" element={<ClientPortal />} />
             <Route path="/login" element={<Login />} />
             <Route path="*" element={<Navigate to="/" replace />} />

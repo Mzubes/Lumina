@@ -39,6 +39,34 @@ Create an initial user with:
 flask --app app create-user --email admin@example.com --role admin
 ```
 
+A `client`-role user represents a client-portal login and requires an
+existing `Client` row:
+
+```bash
+flask --app app create-user --email client@example.com --role client --client-id 1
+```
+
+## Database migrations
+
+Schema changes are managed with Alembic (`lumina-reporting/backend/migrations`).
+
+```bash
+cd lumina-reporting/backend
+alembic upgrade head
+```
+
+Against a database that predates Alembic (i.e. already has `users`/`fund_data`
+created via `create_all()`), stamp it at the baseline revision once before
+upgrading:
+
+```bash
+alembic stamp 8a3c6a4d1e8f
+alembic upgrade head
+```
+
+`DATABASE_URL` is read the same way the app reads it; set it before running
+Alembic commands against a non-default database.
+
 ## Verification
 
 ```bash
