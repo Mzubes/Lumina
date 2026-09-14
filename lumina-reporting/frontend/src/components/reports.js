@@ -3,22 +3,73 @@ import { apiDownload, apiFetch, isDemoMode } from '../api';
 import ReportsTable from './ReportsTable';
 
 const demoReports = [
-  { id: 1, title: 'Q2 Institutional Portfolio Report', client_id: 1, status: 'draft', created_at: null },
-  { id: 2, title: 'July Performance Summary', client_id: 1, status: 'review', created_at: null },
-  { id: 3, title: 'Investment Committee Factsheet', client_id: 2, status: 'distributed', created_at: null },
+  { id: 1, title: 'Q2 Institutional Portfolio Report', client_id: 1, status: 'draft', team: 'Wealth Management', report_type: 'holdings', created_at: null },
+  { id: 2, title: 'July Performance Summary', client_id: 1, status: 'review', team: 'Institutional Sales', report_type: 'performance', created_at: null },
+  { id: 3, title: 'Investment Committee Factsheet', client_id: 2, status: 'distributed', team: 'Wealth Management', report_type: 'factsheet', created_at: null },
 ];
+
+const STATUS_PILLS = [
+  { value: '', label: 'All' },
+  { value: 'draft', label: 'Draft' },
+  { value: 'review', label: 'In review' },
+  { value: 'approved', label: 'Approved' },
+  { value: 'distributed', label: 'Distributed' },
+];
+
+const REPORT_TYPE_LABELS = {
+  factsheet: 'Factsheet',
+  performance: 'Performance Report',
+  holdings: 'Holdings Report',
+  pitchbook: 'Pitchbook',
+  custom: 'Custom',
+};
+
+const emptyFilters = { status: '', client_id: '', team: '', report_type: '', asset_class: '', q: '' };
+
+const buildQuery = (filters) => {
+  const params = new URLSearchParams();
+  Object.entries(filters).forEach(([key, value]) => { if (value) params.set(key, value); });
+  const query = params.toString();
+  return query ? `?${query}` : '';
+};
 
 const Reports = () => {
   const [reports, setReports] = useState([]);
   const [error, setError] = useState('');
   const role = window.localStorage.getItem('lumina_role') || '';
+  const canCreate = ['admin', 'editor'].includes(role);
+
+  const [filters, setFilters] = useState(emptyFilters);
+  const [searchInput, setSearchInput] = useState('');
+  const [facets, setFacets] = useState({ teams: [], reportTypes: [], assetClasses: [] });
+  const [clients, setClients] = useState([]);
+  const [templates, setTemplates] = useState([]);
+
+  const [form, setForm] = useState({ title: '', client_id: '', team: '', report_type: '', template_id: '' });
+  const [formMessage, setFormMessage] = useState('');
 
   const loadReports = () => {
     if (isDemoMode) { setReports(demoReports); return; }
-    apiFetch('/api/reports').then(setReports).catch(() => setReports(demoReports));
+    apiFetch(`/api/reports${buildQuery(filters)}`).then(setReports).catch(() => setReports(demoReports));
   };
 
-  useEffect(loadReports, []);
+  useEffect(loadReports, [filters]);
+
+  useEffect(() => {
+    if (isDemoMode) return;
+    apiFetch('/api/reports/facets').then(setFacets).catch(() => {});
+    apiFetch('/api/clients').then(setClients).catch(() => {});
+    apiFetch('/api/templates').then(setTemplates).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    const handle = setTimeout(() => setFilters(current => ({ ...current, q: searchInput })), 300);
+    return () => clearTimeout(handle);
+  }, [searchInput]);
+
+  const updateFilter = (key, value) => setFilters(current => ({ ...current, [key]: value }));
+  const clearFilters = () => { setFilters(emptyFilters); setSearchInput(''); };
+  const filtersActive = Object.values(filters).some(Boolean);
 
   const handleAction = async (report, action) => {
     setError('');
@@ -36,12 +87,109 @@ const Reports = () => {
     } catch (requestError) { setError(requestError.message); }
   };
 
+  const handleCreate = async (event) => {
+    event.preventDefault();
+    setFormMessage('');
+    try {
+      await apiFetch('/api/reports', {
+        method: 'POST',
+        body: JSON.stringify({
+          title: form.title,
+          client_id: Number(form.client_id),
+          team: form.team || undefined,
+          report_type: form.report_type || undefined,
+          template_id: form.template_id ? Number(form.template_id) : undefined,
+        }),
+      });
+      setForm({ title: '', client_id: '', team: '', report_type: '', template_id: '' });
+      loadReports();
+      apiFetch('/api/reports/facets').then(setFacets).catch(() => {});
+    } catch (requestError) { setFormMessage(requestError.message); }
+  };
+
   return (
     <div className="reports">
       <div className="page-heading"><div><span className="eyebrow">Production</span><h1>Reports</h1></div>{isDemoMode && <span className="demo-badge">Demo data</span>}</div>
-      <div className="panel">
+
+      {canCreate && (
+        <section className="panel">
+          <h2>New report</h2>
+          <form onSubmit={handleCreate}>
+            <label>Title
+              <input value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} required />
+            </label>
+            <label>Client
+              <select value={form.client_id} onChange={e => setForm({ ...form, client_id: e.target.value })} required>
+                <option value="">Choose a client…</option>
+                {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+            </label>
+            <label>Team
+              <input
+                value={form.team} onChange={e => setForm({ ...form, team: e.target.value })}
+                list="team-suggestions" placeholder="e.g. Wealth Management"
+              />
+              <datalist id="team-suggestions">
+                {facets.teams.map(team => <option key={team} value={team} />)}
+              </datalist>
+            </label>
+            <label>Report type
+              <select value={form.report_type} onChange={e => setForm({ ...form, report_type: e.target.value })}>
+                <option value="">Not specified</option>
+                {Object.entries(REPORT_TYPE_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+              </select>
+            </label>
+            <label>Template (optional — leave blank for a plain PDF)
+              <select value={form.template_id} onChange={e => setForm({ ...form, template_id: e.target.value })}>
+                <option value="">No template</option>
+                {templates.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+              </select>
+            </label>
+            <div className="form-actions">
+              <button type="submit">Create report</button>
+            </div>
+          </form>
+          {formMessage && <p className="form-message">{formMessage}</p>}
+        </section>
+      )}
+
+      <section className="panel">
+        <div className="filter-bar">
+          <div className="filter-pills">
+            {STATUS_PILLS.map(pill => (
+              <button
+                key={pill.value} type="button"
+                className={`filter-pill ${filters.status === pill.value ? 'active' : ''}`}
+                onClick={() => updateFilter('status', pill.value)}
+              >
+                {pill.label}
+              </button>
+            ))}
+          </div>
+          <select className="filter-select" value={filters.client_id} onChange={e => updateFilter('client_id', e.target.value)}>
+            <option value="">All clients</option>
+            {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+          <select className="filter-select" value={filters.team} onChange={e => updateFilter('team', e.target.value)}>
+            <option value="">All teams</option>
+            {facets.teams.map(team => <option key={team} value={team}>{team}</option>)}
+          </select>
+          <select className="filter-select" value={filters.report_type} onChange={e => updateFilter('report_type', e.target.value)}>
+            <option value="">All types</option>
+            {facets.reportTypes.map(type => <option key={type} value={type}>{REPORT_TYPE_LABELS[type] || type}</option>)}
+          </select>
+          <select className="filter-select" value={filters.asset_class} onChange={e => updateFilter('asset_class', e.target.value)}>
+            <option value="">All asset classes</option>
+            {facets.assetClasses.map(assetClass => <option key={assetClass} value={assetClass}>{assetClass}</option>)}
+          </select>
+          <input
+            className="filter-search" type="search" placeholder="Search title…"
+            value={searchInput} onChange={e => setSearchInput(e.target.value)}
+          />
+          {filtersActive && <button type="button" className="filter-clear" onClick={clearFilters}>Clear filters</button>}
+        </div>
         <ReportsTable reports={reports} role={role} onAction={handleAction} onExport={handleExport} />
-      </div>
+      </section>
       {error && <p className="form-message">{error}</p>}
     </div>
   );

@@ -22,6 +22,9 @@ def test_dashboard_returns_data(client, auth_headers, sample_client):
     assert body['pendingApprovals'] == 1
     assert body['totalReports'] == 1
     assert body['reportsByStatus'] == {'draft': 0, 'review': 1, 'approved': 0, 'distributed': 0}
+    assert body['reportsByTeam'] == [{'label': 'Unassigned', 'count': 1}]
+    assert body['reportsByClient'] == [{'label': 'Acme Institutional', 'count': 1}]
+    assert body['failedDataSources'] == []
     assert body['recentReports'][0]['name'] == 'Pending Review Report'
 
 def test_fund_round_trip(client, auth_headers):

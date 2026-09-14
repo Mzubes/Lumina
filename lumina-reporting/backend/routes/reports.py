@@ -4,7 +4,7 @@ from flask import Blueprint, Response, g, jsonify, request
 
 from database import db_session
 from logs import log_action
-from models import Client, Report, ReportTemplate, ReportTransition
+from models import Client, FundData, Report, ReportTemplate, ReportTransition
 from renderers import CONTENT_TYPES, RENDERERS
 from report_content import resolve_report_content
 from report_generator import generate_pdf
@@ -15,6 +15,8 @@ reports_blueprint = Blueprint('reports', __name__)
 
 BACKEND_DIR = Path(__file__).resolve().parent.parent
 REPORTS_DIR = BACKEND_DIR / 'static' / 'reports'
+
+REPORT_TYPES = ['factsheet', 'performance', 'holdings', 'pitchbook', 'custom']
 
 def _scoped_query():
     query = db_session.query(Report)
@@ -40,8 +42,37 @@ def list_reports():
         status = request.args.get('status')
         if status:
             query = query.filter_by(status=status)
+        client_id = request.args.get('client_id', type=int)
+        if client_id:
+            query = query.filter_by(client_id=client_id)
+        team = request.args.get('team')
+        if team:
+            query = query.filter_by(team=team)
+        report_type = request.args.get('report_type')
+        if report_type:
+            query = query.filter_by(report_type=report_type)
+        asset_class = request.args.get('asset_class')
+        if asset_class:
+            query = query.join(FundData, Report.fund_id == FundData.id).filter(FundData.asset_class == asset_class)
+        search = request.args.get('q')
+        if search:
+            query = query.filter(Report.title.ilike(f'%{search}%'))
     reports = query.order_by(Report.created_at.desc()).all()
     return jsonify([report.serialize() for report in reports])
+
+@reports_blueprint.get('/api/reports/facets')
+@require_auth(roles=['admin', 'editor', 'viewer'])
+def get_report_facets():
+    teams = [
+        row[0] for row in
+        db_session.query(Report.team).filter(Report.team.isnot(None)).distinct().order_by(Report.team.asc()).all()
+    ]
+    asset_classes = [
+        row[0] for row in
+        db_session.query(FundData.asset_class)
+        .filter(FundData.asset_class.isnot(None)).distinct().order_by(FundData.asset_class.asc()).all()
+    ]
+    return jsonify({'teams': teams, 'reportTypes': REPORT_TYPES, 'assetClasses': asset_classes})
 
 @reports_blueprint.get('/api/reports/<int:report_id>')
 @require_auth()
@@ -88,6 +119,8 @@ def create_report():
         client_id=client_id,
         fund_id=data.get('fund_id'),
         template_id=template.id if template else None,
+        team=data.get('team') or None,
+        report_type=data.get('report_type') or None,
         status='draft',
         created_by=g.current_user['user_id'],
     )

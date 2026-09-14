@@ -13,14 +13,18 @@ import {
   IconLayout, IconLogIn, IconLogOut, IconPlug, IconUsers,
 } from './icons';
 
-const navItems = [
-  ['/', 'Dashboard', IconDashboard],
-  ['/data-hub', 'Data Hub', IconDatabase],
-  ['/data-sources', 'Data Sources', IconPlug],
-  ['/templates', 'Templates', IconLayout],
-  ['/reports', 'Reports', IconDocument],
-  ['/approvals', 'Approvals', IconCheckCircle],
-  ['/client-portal', 'Client Portal', IconUsers],
+const navSections = [
+  { label: 'Overview', items: [['/', 'Dashboard', IconDashboard]] },
+  { label: 'Data', items: [
+    ['/data-hub', 'Data Hub', IconDatabase],
+    ['/data-sources', 'Data Sources', IconPlug],
+  ] },
+  { label: 'Production', items: [
+    ['/templates', 'Templates', IconLayout],
+    ['/reports', 'Reports', IconDocument],
+    ['/approvals', 'Approvals', IconCheckCircle],
+  ] },
+  { label: 'Client', items: [['/client-portal', 'Client Portal', IconUsers]] },
 ];
 
 const ROLE_LABEL = { admin: 'Admin', editor: 'Editor', viewer: 'Viewer', client: 'Client' };
@@ -50,11 +54,18 @@ function Sidebar() {
           <div className="brand-subtitle">Institutional Reporting</div>
         </div>
       </div>
-      <nav>{navItems.map(([to, label, Icon]) => (
-        <NavLink key={to} to={to} end={to === '/'}>
-          <Icon /><span>{label}</span>
-        </NavLink>
-      ))}</nav>
+      <nav>
+        {navSections.map(section => (
+          <React.Fragment key={section.label}>
+            <div className="nav-section-label">{section.label}</div>
+            {section.items.map(([to, label, Icon]) => (
+              <NavLink key={to} to={to} end={to === '/'}>
+                <Icon /><span>{label}</span>
+              </NavLink>
+            ))}
+          </React.Fragment>
+        ))}
+      </nav>
       {token ? (
         <button type="button" className="login-link session-link" onClick={handleLogout}>
           <IconLogOut />

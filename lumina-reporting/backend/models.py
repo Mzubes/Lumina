@@ -58,6 +58,8 @@ class Report(Base):
     client_id = Column(Integer, ForeignKey('clients.id'), nullable=False)
     fund_id = Column(Integer, ForeignKey('fund_data.id'), nullable=True)
     template_id = Column(Integer, ForeignKey('report_templates.id'), nullable=True)
+    team = Column(String(60), nullable=True)
+    report_type = Column(String(30), nullable=True)
     status = Column(String(20), nullable=False, default='draft')
     file_path = Column(String(255))
     created_by = Column(Integer, ForeignKey('users.id'), nullable=False)
@@ -71,6 +73,8 @@ class Report(Base):
             "client_id": self.client_id,
             "fund_id": self.fund_id,
             "template_id": self.template_id,
+            "team": self.team,
+            "report_type": self.report_type,
             "status": self.status,
             "file_path": self.file_path,
             "created_by": self.created_by,

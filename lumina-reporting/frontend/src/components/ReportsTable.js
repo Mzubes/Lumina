@@ -32,7 +32,14 @@ const ReportsTable = ({ reports, role, onAction, onExport, emptyMessage = 'No re
     <tbody>
       {reports.map(report => (
         <tr key={report.id}>
-          <td>{report.title}</td>
+          <td>
+            {report.title}
+            {(report.team || report.report_type) && (
+              <div className="reports-table-subtext">
+                {[report.team, report.report_type].filter(Boolean).join(' · ')}
+              </div>
+            )}
+          </td>
           <td>Client #{report.client_id}</td>
           <td><span className={`status-badge status-${report.status}`}>{STATUS_LABEL[report.status] || report.status}</span></td>
           <td>{report.created_at ? new Date(report.created_at).toLocaleDateString() : '—'}</td>
