@@ -24,7 +24,7 @@ const EXPORT_FORMATS = [
   { value: 'raw', label: 'Raw data (JSON)' },
 ];
 
-const ReportsTable = ({ reports, role, onAction, onExport }) => (
+const ReportsTable = ({ reports, role, onAction, onExport, emptyMessage = 'No reports found.' }) => (
   <table className="reports-table">
     <thead>
       <tr><th>Title</th><th>Client</th><th>Status</th><th>Created</th><th>Actions</th>{onExport && <th>Export</th>}</tr>
@@ -65,7 +65,7 @@ const ReportsTable = ({ reports, role, onAction, onExport }) => (
         </tr>
       ))}
       {reports.length === 0 && (
-        <tr><td colSpan={onExport ? 6 : 5} className="reports-table-empty">No reports found.</td></tr>
+        <tr><td colSpan={onExport ? 6 : 5} className="reports-table-empty">{emptyMessage}</td></tr>
       )}
     </tbody>
   </table>

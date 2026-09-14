@@ -30,7 +30,14 @@ const Approvals = () => {
     <div className="approvals">
       <div className="page-heading"><div><span className="eyebrow">Oversight</span><h1>Approvals</h1></div>{isDemoMode && <span className="demo-badge">Demo data</span>}</div>
       <div className="panel">
-        <ReportsTable reports={reports} role={role} onAction={handleAction} />
+        <div className="panel-header"><h2>Awaiting review</h2></div>
+        <p className="panel-subtitle">
+          {reports.length === 0 ? 'Nothing waiting on your review right now.' : `${reports.length} report${reports.length === 1 ? '' : 's'} need${reports.length === 1 ? 's' : ''} a decision.`}
+        </p>
+        <ReportsTable
+          reports={reports} role={role} onAction={handleAction}
+          emptyMessage="Nothing waiting on your review right now."
+        />
       </div>
       {error && <p className="form-message">{error}</p>}
     </div>
