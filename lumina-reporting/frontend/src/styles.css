@@ -22,9 +22,12 @@ h2 { font-size: 18px; margin: 0 0 16px; }
 .metric-card, .panel { border: 1px solid #263852; background: rgba(17, 28, 46, .82); border-radius: 14px; padding: 20px; box-shadow: 0 14px 40px rgba(0, 0, 0, .16); }
 .metric-card span { color: #94a3b8; font-size: 13px; }
 .metric-card strong { display: block; margin-top: 10px; font-size: 31px; }
+.panel + .panel { margin-top: 20px; }
 .report-list { list-style: none; padding: 0; margin: 0; }
-.report-list li { padding: 13px 0; border-bottom: 1px solid #263852; display: flex; justify-content: space-between; gap: 10px; }
+.report-list li { padding: 13px 0; border-bottom: 1px solid #263852; display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .report-list li:last-child { border-bottom: 0; }
+.report-list li > span:first-child { flex: 1; }
+.muted { color: #94a3b8; font-style: normal; font-size: 12px; }
 .login form { max-width: 420px; padding: 20px; border: 1px solid #263852; border-radius: 14px; background: #111c2e; }
 .login form button { margin-top: 10px; width: 100%; }
 .form-message { max-width: 420px; color: #fda4af; }
@@ -40,4 +43,23 @@ h2 { font-size: 18px; margin: 0 0 16px; }
 .status-review { background: #422006; color: #fde68a; }
 .status-approved { background: #0c3b2e; color: #6ee7b7; }
 .status-distributed { background: #0f2e4a; color: #7dd3fc; }
-@media (max-width: 760px) { .app-shell { grid-template-columns: 1fr; } .sidebar { border-right: 0; border-bottom: 1px solid #223047; } .sidebar nav { grid-template-columns: repeat(2, 1fr); } .login-link { margin-top: 14px; } .main-content { padding: 26px 18px; } .metric-grid { grid-template-columns: 1fr; } }
+.panel form label { display: block; margin: 10px 0 4px; font-size: 13px; color: #94a3b8; }
+.panel form input, .panel form select, .panel form textarea { margin: 2px 0 0; }
+.panel form textarea { width: 100%; min-height: 90px; padding: 11px 12px; border: 1px solid #334155; border-radius: 8px; background: #111c2e; color: #eaf0f8; font-family: inherit; resize: vertical; }
+.panel h3 { font-size: 14px; margin: 20px 0 4px; color: #cbd5e1; }
+.field-hint { color: #94a3b8; font-size: 12px; margin: 0 0 10px; }
+.column-map-row { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
+.column-map-row input, .column-map-row select { flex: 1; margin: 0; }
+.column-map-row button { flex-shrink: 0; }
+.form-actions { margin-top: 16px; display: flex; gap: 10px; }
+.form-message-success { color: #6ee7b7; }
+.component-row { border: 1px solid #263852; border-radius: 10px; padding: 12px; margin-bottom: 10px; }
+.component-row-header { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.component-row-header select { width: auto; flex: 0 0 200px; margin: 0; }
+.component-row-header input { flex: 1; margin: 0; min-width: 160px; }
+.component-row-header button { flex-shrink: 0; padding: 9px 11px; }
+.period-checkboxes { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 10px; }
+.checkbox-label { display: flex; align-items: center; gap: 6px; color: #cbd5e1; font-size: 13px; margin: 0; }
+.checkbox-label input { width: auto; margin: 0; }
+.component-row textarea { margin-top: 10px; }
+@media (max-width: 760px) { .app-shell { grid-template-columns: 1fr; } .sidebar { border-right: 0; border-bottom: 1px solid #223047; } .sidebar nav { grid-template-columns: repeat(2, 1fr); } .login-link { margin-top: 14px; } .main-content { padding: 26px 18px; } .metric-grid { grid-template-columns: 1fr; } .component-row-header select, .component-row-header input { flex: 1 1 100%; } }

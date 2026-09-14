@@ -3,13 +3,16 @@ import { HashRouter, NavLink, Navigate, Route, Routes } from 'react-router-dom';
 import Dashboard from './components/Dashboard';
 import Approvals from './components/approvals';
 import DataHub from './components/datahub';
+import DataSources from './components/datasources';
 import Reports from './components/reports';
+import Templates from './components/templates';
 import Login from './pages/Login';
 import ClientPortal from './pages/ClientPortal';
 
 const navItems = [
-  ['/', 'Dashboard'], ['/data-hub', 'Data Hub'], ['/reports', 'Reports'],
-  ['/approvals', 'Approvals'], ['/client-portal', 'Client Portal'],
+  ['/', 'Dashboard'], ['/data-hub', 'Data Hub'], ['/data-sources', 'Data Sources'],
+  ['/templates', 'Templates'], ['/reports', 'Reports'], ['/approvals', 'Approvals'],
+  ['/client-portal', 'Client Portal'],
 ];
 
 function App() {
@@ -28,6 +31,8 @@ function App() {
           <Routes>
             <Route path="/" element={<Dashboard />} />
             <Route path="/data-hub" element={<DataHub />} />
+            <Route path="/data-sources" element={<DataSources />} />
+            <Route path="/templates" element={<Templates />} />
             <Route path="/reports" element={<Reports />} />
             <Route path="/approvals" element={<Approvals />} />
             <Route path="/distribution" element={<Navigate to="/reports" replace />} />

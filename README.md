@@ -67,6 +67,30 @@ alembic upgrade head
 `DATABASE_URL` is read the same way the app reads it; set it before running
 Alembic commands against a non-default database.
 
+## Data sources, templates, and report export
+
+Reports can now be built from a `ReportTemplate` (a name, description, and an
+ordered list of components — holdings table, performance summary, or a
+commentary text block) instead of freeform JSON. Templates and data sources
+are managed entirely through guided forms in the UI (`/data-sources`,
+`/templates`) — no JSON or SQL editing required. A Snowflake data source
+asks for a table name and a "map your columns" list rather than a query; an
+API data source asks for a base URL and paths.
+
+`POST /api/reports` with a `template_id` resolves the template against the
+`Holding`/`PerformanceSnapshot` rows landed for that report's client and
+renders a PDF at creation time. `GET /api/reports/<id>/export?format=pdf|
+pptx|xlsx|raw` re-resolves and renders on demand in any of the four formats,
+so it reflects data synced after the report was first created; a legacy
+report without a template only supports `format=pdf`.
+
+Connecting a real Snowflake account or API isn't exercised by the test
+suite or by CI — both connectors are covered by mocked unit tests
+(`tests/test_connectors.py`) since no live warehouse or vendor API is part
+of this repo. `POST /api/data-sources/<id>/sync` also runs synchronously
+inside the request; a slow warehouse query can hit an HTTP timeout in
+production since there's no background task queue yet.
+
 ## Verification
 
 ```bash

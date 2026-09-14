@@ -7,9 +7,12 @@ BACKEND_DIR = os.path.dirname(os.path.dirname(__file__))
 if BACKEND_DIR not in sys.path:
     sys.path.insert(0, BACKEND_DIR)
 
+import datetime
+import json
+
 from app import create_app
 from database import db_session
-from models import Client, User
+from models import Client, Holding, PerformanceSnapshot, ReportTemplate, User
 
 @pytest.fixture()
 def app(tmp_path):
@@ -85,3 +88,44 @@ def other_client_portal_headers(app, client):
         db_session.add(user)
         db_session.commit()
     return _login_headers(client, 'other-client-user@example.com', 'other-client-password')
+
+@pytest.fixture()
+def sample_holding(app, sample_client):
+    with app.app_context():
+        holding = Holding(
+            client_id=sample_client, as_of_date=datetime.date(2026, 6, 30),
+            security_id='AAPL', security_name='Apple Inc.', asset_class='Equity',
+            quantity=100, market_value=17500.00, weight_pct=12.5,
+        )
+        db_session.add(holding)
+        db_session.commit()
+        return holding.id
+
+@pytest.fixture()
+def sample_performance(app, sample_client):
+    with app.app_context():
+        snapshot = PerformanceSnapshot(
+            client_id=sample_client, as_of_date=datetime.date(2026, 6, 30),
+            period_type='QTD', return_pct=3.25, benchmark_return_pct=2.90,
+        )
+        db_session.add(snapshot)
+        db_session.commit()
+        return snapshot.id
+
+@pytest.fixture()
+def sample_template(app):
+    components = [
+        {"id": "comp-1", "type": "holdings_table", "title": "Portfolio Holdings",
+         "data_binding": {"dataset": "holdings", "filters": {"as_of": "latest"}}},
+        {"id": "comp-2", "type": "performance_summary", "title": "Performance",
+         "data_binding": {"dataset": "performance", "filters": {"period_types": ["QTD"]}}},
+        {"id": "comp-3", "type": "text_block", "title": "Commentary",
+         "data_binding": {"static_text": "Markets were steady this quarter."}},
+    ]
+    with app.app_context():
+        template = ReportTemplate(
+            name='Quarterly Report', components=json.dumps(components), created_by=1,
+        )
+        db_session.add(template)
+        db_session.commit()
+        return template.id

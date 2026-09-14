@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { apiFetch, isDemoMode } from '../api';
+import { apiDownload, apiFetch, isDemoMode } from '../api';
 import ReportsTable from './ReportsTable';
 
 const demoReports = [
@@ -28,11 +28,19 @@ const Reports = () => {
     } catch (requestError) { setError(requestError.message); }
   };
 
+  const handleExport = async (report, format) => {
+    setError('');
+    const query = format === 'raw' ? 'format=raw&raw_format=json' : `format=${format}`;
+    try {
+      await apiDownload(`/api/reports/${report.id}/export?${query}`);
+    } catch (requestError) { setError(requestError.message); }
+  };
+
   return (
     <div className="reports">
       <div className="page-heading"><div><span className="eyebrow">Production</span><h1>Reports</h1></div>{isDemoMode && <span className="demo-badge">Demo data</span>}</div>
       <div className="panel">
-        <ReportsTable reports={reports} role={role} onAction={handleAction} />
+        <ReportsTable reports={reports} role={role} onAction={handleAction} onExport={handleExport} />
       </div>
       {error && <p className="form-message">{error}</p>}
     </div>

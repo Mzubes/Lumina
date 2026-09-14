@@ -5,9 +5,12 @@ from flask_cors import CORS
 from database import configure_database, db_session, init_db, shutdown_session
 from models import User
 from routes.auth import auth_blueprint
+from routes.clients import clients_blueprint
 from routes.dashboard import dashboard_blueprint
 from routes.data_hub import data_hub_blueprint
+from routes.data_sources import data_sources_blueprint
 from routes.reports import reports_blueprint
+from routes.templates import templates_blueprint
 
 def create_app(test_config=None):
     app = Flask(__name__)
@@ -18,12 +21,18 @@ def create_app(test_config=None):
     configure_database(app.config['SQLALCHEMY_DATABASE_URI'])
     init_db()
     app.teardown_appcontext(shutdown_session)
-    CORS(app, resources={r'/api/*': {'origins': app.config['CORS_ORIGINS']}})
+    CORS(app, resources={r'/api/*': {
+        'origins': app.config['CORS_ORIGINS'],
+        'expose_headers': ['Content-Disposition'],
+    }})
 
     app.register_blueprint(auth_blueprint)
     app.register_blueprint(dashboard_blueprint)
     app.register_blueprint(data_hub_blueprint)
+    app.register_blueprint(data_sources_blueprint)
+    app.register_blueprint(clients_blueprint)
     app.register_blueprint(reports_blueprint)
+    app.register_blueprint(templates_blueprint)
 
     @app.get('/api/health')
     def health():

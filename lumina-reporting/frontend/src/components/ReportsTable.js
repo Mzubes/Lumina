@@ -17,10 +17,17 @@ const ACTIONS_BY_STATUS = {
   distributed: [],
 };
 
-const ReportsTable = ({ reports, role, onAction }) => (
+const EXPORT_FORMATS = [
+  { value: 'pdf', label: 'PDF' },
+  { value: 'pptx', label: 'PowerPoint' },
+  { value: 'xlsx', label: 'Excel' },
+  { value: 'raw', label: 'Raw data (JSON)' },
+];
+
+const ReportsTable = ({ reports, role, onAction, onExport }) => (
   <table className="reports-table">
     <thead>
-      <tr><th>Title</th><th>Client</th><th>Status</th><th>Created</th><th>Actions</th></tr>
+      <tr><th>Title</th><th>Client</th><th>Status</th><th>Created</th><th>Actions</th>{onExport && <th>Export</th>}</tr>
     </thead>
     <tbody>
       {reports.map(report => (
@@ -36,10 +43,29 @@ const ReportsTable = ({ reports, role, onAction }) => (
                 <button key={action} onClick={() => onAction(report, action)}>{label}</button>
               ))}
           </td>
+          {onExport && (
+            <td>
+              <select
+                value=""
+                onChange={(event) => {
+                  const format = event.target.value;
+                  if (format) onExport(report, format);
+                  event.target.value = '';
+                }}
+              >
+                <option value="">Export as…</option>
+                {EXPORT_FORMATS.map(({ value, label }) => (
+                  <option key={value} value={value} disabled={!report.template_id && value !== 'pdf'}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            </td>
+          )}
         </tr>
       ))}
       {reports.length === 0 && (
-        <tr><td colSpan={5} className="reports-table-empty">No reports found.</td></tr>
+        <tr><td colSpan={onExport ? 6 : 5} className="reports-table-empty">No reports found.</td></tr>
       )}
     </tbody>
   </table>
