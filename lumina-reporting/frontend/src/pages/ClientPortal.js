@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { apiBaseUrl, apiFetch, isDemoMode } from '../api';
+import CompositionBar from '../components/charts/CompositionBar';
 
 const demoReports = [
   { id: 1, title: 'Q2 Institutional Portfolio Report', file_path: null, created_at: null },
@@ -24,6 +26,27 @@ const formatCurrency = (value) => (
   value == null ? '—' : `$${Number(value).toLocaleString(undefined, { maximumFractionDigits: 0 })}`
 );
 const formatPercent = (value) => (value == null ? '—' : `${value > 0 ? '+' : ''}${Number(value).toFixed(1)}%`);
+
+const CATEGORICAL_COLORS = ['var(--cat-1)', 'var(--cat-2)', 'var(--cat-3)', 'var(--cat-4)', 'var(--cat-5)', 'var(--cat-6)'];
+
+// Composition rides on the stacked/segmented bar, not a donut (dataviz skill:
+// part-to-whole -> stacked bar; donut stays deprioritized). Folds past the
+// 6-slot categorical ceiling into "Other", matching the same pattern the
+// dashboard aggregates already use server-side.
+const assetAllocation = (holdings) => {
+  const totals = {};
+  holdings.forEach((holding) => {
+    const label = holding.asset_class || 'Unassigned';
+    totals[label] = (totals[label] || 0) + (Number(holding.market_value) || 0);
+  });
+  const sorted = Object.entries(totals).sort((a, b) => b[1] - a[1]);
+  const top = sorted.slice(0, 6).map(([label, value], index) => ({
+    label, value, color: label === 'Unassigned' ? 'var(--cat-other)' : CATEGORICAL_COLORS[index % CATEGORICAL_COLORS.length],
+  }));
+  const overflow = sorted.slice(6).reduce((sum, [, value]) => sum + value, 0);
+  if (overflow) top.push({ label: 'Other', value: overflow, color: 'var(--cat-other)' });
+  return top;
+};
 
 const ClientPortal = () => {
   const [reports, setReports] = useState([]);
@@ -72,6 +95,13 @@ const ClientPortal = () => {
 
           {portfolio.holdings.length > 0 && (
             <section className="panel">
+              <div className="panel-header"><h2>Asset allocation</h2></div>
+              <CompositionBar title="Asset allocation" unitLabel="in assets" data={assetAllocation(portfolio.holdings)} />
+            </section>
+          )}
+
+          {portfolio.holdings.length > 0 && (
+            <section className="panel">
               <h2>Holdings</h2>
               <table className="data-table">
                 <thead>
@@ -96,10 +126,10 @@ const ClientPortal = () => {
       <section className="panel"><h2>Your reports</h2><ul className="report-list">
         {reports.map(report => (
           <li key={report.id}>
-            {report.title}
+            <Link to={`/reports/${report.id}`} className="reports-table-title-link">{report.title}</Link>
             {report.file_path
-              ? <a href={`${apiBaseUrl}${report.file_path}`} target="_blank" rel="noreferrer"><button>View</button></a>
-              : <button disabled>View</button>}
+              ? <a href={`${apiBaseUrl}${report.file_path}`} target="_blank" rel="noreferrer"><button>View PDF</button></a>
+              : <button disabled>View PDF</button>}
           </li>
         ))}
         {reports.length === 0 && <li>No reports have been distributed to you yet.</li>}

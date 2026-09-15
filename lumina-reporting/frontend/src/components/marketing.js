@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { apiDownload, apiFetch, isDemoMode } from '../api';
-import ReportsTable from './ReportsTable';
+import ReportsTable, { statusBreakdown } from './ReportsTable';
 import { buildQuery, emptyFilters } from './reports';
+import CompositionBar from './charts/CompositionBar';
 
 const MARKETING_TYPES = { factsheet: 'Factsheet', marketing: 'Marketing Material' };
 
@@ -140,6 +141,13 @@ const Marketing = () => {
             </div>
           </form>
           {formMessage && <p className="form-message">{formMessage}</p>}
+        </section>
+      )}
+
+      {reports.length > 0 && (
+        <section className="panel">
+          <div className="panel-header"><h2>Status mix</h2></div>
+          <CompositionBar title="Status mix" data={statusBreakdown(reports)} />
         </section>
       )}
 

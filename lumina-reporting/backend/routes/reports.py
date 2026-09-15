@@ -4,12 +4,12 @@ from flask import Blueprint, Response, g, jsonify, request
 
 from database import db_session
 from logs import log_action
-from models import Client, FundData, Report, ReportTemplate, ReportTransition
+from models import Client, FundData, Report, ReportTemplate, ReportTransition, User
 from renderers import CONTENT_TYPES, RENDERERS
 from report_content import resolve_report_content
 from report_generator import generate_pdf
 from routes.auth import require_auth
-from workflow import InvalidTransition, apply_transition
+from workflow import InvalidTransition, apply_transition, requires_compliance
 
 reports_blueprint = Blueprint('reports', __name__)
 
@@ -33,6 +33,14 @@ def _save_pdf_bytes(pdf_bytes, report_id):
     filename = REPORTS_DIR / f"report_{report_id}.pdf"
     filename.write_bytes(pdf_bytes)
     return f"/static/reports/{filename.name}"
+
+def _serialize_report(report):
+    # Every endpoint returning a single Report carries this -- the frontend's
+    # workflow stepper needs it to render the Compliance step correctly
+    # (done/current/skipped) after every action, not just on initial load.
+    payload = report.serialize()
+    payload['complianceRequired'] = requires_compliance(report)
+    return payload
 
 @reports_blueprint.get('/api/reports')
 @require_auth()
@@ -80,21 +88,25 @@ def get_report(report_id):
     report = _get_scoped_report(report_id)
     if not report:
         return jsonify({'message': 'Report not found'}), 404
-    return jsonify(report.serialize())
+    return jsonify(_serialize_report(report))
 
 @reports_blueprint.get('/api/reports/<int:report_id>/history')
-@require_auth(roles=['admin', 'editor', 'viewer'])
+@require_auth(roles=['admin', 'editor', 'viewer', 'compliance'])
 def get_report_history(report_id):
     report = _get_scoped_report(report_id)
     if not report:
         return jsonify({'message': 'Report not found'}), 404
     transitions = (
-        db_session.query(ReportTransition)
-        .filter_by(report_id=report.id)
+        db_session.query(ReportTransition, User.email)
+        .join(User, ReportTransition.actor_id == User.id)
+        .filter(ReportTransition.report_id == report.id)
         .order_by(ReportTransition.created_at.asc())
         .all()
     )
-    return jsonify([transition.serialize() for transition in transitions])
+    return jsonify([
+        {**transition.serialize(), 'actor_email': actor_email}
+        for transition, actor_email in transitions
+    ])
 
 @reports_blueprint.post('/api/reports')
 @require_auth(roles=['admin', 'editor'])
@@ -135,7 +147,7 @@ def create_report():
     db_session.commit()
     log_action(f"Report {report.id} generated from {request.remote_addr}")
 
-    return jsonify(report.serialize()), 201
+    return jsonify(_serialize_report(report)), 201
 
 @reports_blueprint.get('/api/reports/<int:report_id>/export')
 @require_auth()
@@ -194,7 +206,7 @@ def _transition_route(action, roles):
             apply_transition(report, action, g.current_user['user_id'], note=data.get('note'))
         except InvalidTransition as error:
             return jsonify({'message': str(error)}), 409
-        return jsonify(report.serialize())
+        return jsonify(_serialize_report(report))
     return handler
 
 reports_blueprint.add_url_rule(

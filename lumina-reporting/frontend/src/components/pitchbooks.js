@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { apiDownload, apiFetch, isDemoMode } from '../api';
-import ReportsTable from './ReportsTable';
+import ReportsTable, { statusBreakdown } from './ReportsTable';
+import CompositionBar from './charts/CompositionBar';
 
 const PACK_TYPES = { pitchbook: 'Pitch Book', meeting_pack: 'Meeting Pack' };
 
@@ -202,6 +203,13 @@ const Pitchbooks = () => {
             </div>
           </form>
           {formMessage && <p className="form-message">{formMessage}</p>}
+        </section>
+      )}
+
+      {reports.length > 0 && (
+        <section className="panel">
+          <div className="panel-header"><h2>Status mix</h2></div>
+          <CompositionBar title="Status mix" data={statusBreakdown(reports)} />
         </section>
       )}
 

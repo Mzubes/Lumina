@@ -8,6 +8,7 @@ import DataSources from './components/datasources';
 import Marketing from './components/marketing';
 import Pitchbooks from './components/pitchbooks';
 import Reports from './components/reports';
+import ReportDetail from './components/ReportDetail';
 import Templates from './components/templates';
 import Login from './pages/Login';
 import ClientPortal from './pages/ClientPortal';
@@ -100,6 +101,7 @@ function App() {
             <Route path="/data-sources" element={<DataSources />} />
             <Route path="/templates" element={<Templates />} />
             <Route path="/reports" element={<Reports />} />
+            <Route path="/reports/:id" element={<ReportDetail />} />
             <Route path="/approvals" element={<Approvals />} />
             <Route path="/compliance" element={<Compliance />} />
             <Route path="/marketing" element={<Marketing />} />

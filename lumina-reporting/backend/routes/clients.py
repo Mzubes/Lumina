@@ -7,7 +7,7 @@ from routes.auth import require_auth
 clients_blueprint = Blueprint('clients', __name__)
 
 @clients_blueprint.get('/api/clients')
-@require_auth(roles=['admin', 'editor', 'viewer'])
+@require_auth(roles=['admin', 'editor', 'viewer', 'compliance'])
 def list_clients():
     clients = db_session.query(Client).order_by(Client.name.asc()).all()
     return jsonify([client.serialize() for client in clients])

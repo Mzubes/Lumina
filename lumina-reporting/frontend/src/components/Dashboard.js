@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { apiFetch, isDemoMode } from '../api';
 import BarChart from './charts/BarChart';
+import CompositionBar from './charts/CompositionBar';
 
 const demoDashboard = {
   pendingApprovals: 3,
@@ -123,6 +124,12 @@ const Dashboard = () => {
         </div>
         <p className="panel-subtitle">{activeView.subtitle}</p>
         <BarChart title={activeView.label} data={chartData} />
+        {view === 'status' && (
+          <div className="dashboard-composition">
+            <h3 className="composition-heading">Pipeline mix</h3>
+            <CompositionBar title="Pipeline mix" data={chartData} />
+          </div>
+        )}
       </section>
 
       <section className="panel"><h2>Recent reports</h2><ul className="report-list">

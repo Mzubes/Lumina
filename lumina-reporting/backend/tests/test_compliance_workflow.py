@@ -75,6 +75,36 @@ def test_compliance_cannot_certify_from_review(client, auth_headers, compliance_
     response = client.post(f'/api/reports/{report_id}/certify', headers=compliance_headers)
     assert response.status_code == 409
 
+def test_get_report_includes_compliance_required_flag(client, auth_headers, sample_client):
+    factsheet = _create_report(client, auth_headers, sample_client, report_type='factsheet')
+    performance = _create_report(client, auth_headers, sample_client, report_type='performance')
+
+    factsheet_response = client.get(f"/api/reports/{factsheet['id']}", headers=auth_headers)
+    assert factsheet_response.get_json()['complianceRequired'] is True
+
+    performance_response = client.get(f"/api/reports/{performance['id']}", headers=auth_headers)
+    assert performance_response.get_json()['complianceRequired'] is False
+
+def test_compliance_required_flag_survives_transition_responses(client, auth_headers, sample_client):
+    report = _create_report(client, auth_headers, sample_client, report_type='factsheet')
+    report_id = report['id']
+
+    submitted = client.post(f'/api/reports/{report_id}/submit', headers=auth_headers)
+    assert submitted.get_json()['complianceRequired'] is True
+
+    approved = client.post(f'/api/reports/{report_id}/approve', headers=auth_headers)
+    assert approved.get_json()['complianceRequired'] is True
+
+def test_compliance_role_can_read_history(client, auth_headers, compliance_headers, sample_client):
+    report = _create_report(client, auth_headers, sample_client, report_type='pitchbook')
+    report_id = report['id']
+    client.post(f'/api/reports/{report_id}/submit', headers=auth_headers)
+
+    response = client.get(f'/api/reports/{report_id}/history', headers=compliance_headers)
+    assert response.status_code == 200
+    entry = response.get_json()[0]
+    assert entry['actor_email'] == 'admin@example.com'
+
 def test_full_happy_path_through_compliance(client, auth_headers, compliance_headers, sample_client):
     report = _create_report(client, auth_headers, sample_client, report_type='meeting_pack')
     report_id = report['id']

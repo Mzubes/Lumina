@@ -1,6 +1,7 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
 
-const STATUS_LABEL = {
+export const STATUS_LABEL = {
   draft: 'Draft',
   review: 'In review',
   compliance: 'Compliance review',
@@ -8,7 +9,7 @@ const STATUS_LABEL = {
   distributed: 'Distributed',
 };
 
-const ACTIONS_BY_STATUS = {
+export const ACTIONS_BY_STATUS = {
   draft: [{ action: 'submit', label: 'Submit for review', roles: ['admin', 'editor'] }],
   review: [
     { action: 'approve', label: 'Approve', roles: ['admin'] },
@@ -22,7 +23,27 @@ const ACTIONS_BY_STATUS = {
   distributed: [],
 };
 
-const EXPORT_FORMATS = [
+const STATUS_COLOR = {
+  draft: 'var(--c-draft)',
+  review: 'var(--c-review)',
+  compliance: 'var(--c-compliance)',
+  approved: 'var(--c-approved)',
+  distributed: 'var(--c-distributed)',
+};
+
+// Client-side status tally for a fetched reports list, in canonical pipeline
+// order -- feeds CompositionBar without a dedicated backend endpoint.
+export const statusBreakdown = (reports) => {
+  const counts = reports.reduce((tally, report) => {
+    tally[report.status] = (tally[report.status] || 0) + 1;
+    return tally;
+  }, {});
+  return Object.keys(STATUS_LABEL).map(status => ({
+    label: STATUS_LABEL[status], value: counts[status] || 0, color: STATUS_COLOR[status],
+  }));
+};
+
+export const EXPORT_FORMATS = [
   { value: 'pdf', label: 'PDF' },
   { value: 'pptx', label: 'PowerPoint' },
   { value: 'xlsx', label: 'Excel' },
@@ -38,7 +59,7 @@ const ReportsTable = ({ reports, role, onAction, onExport, emptyMessage = 'No re
       {reports.map(report => (
         <tr key={report.id}>
           <td>
-            {report.title}
+            <Link to={`/reports/${report.id}`} className="reports-table-title-link">{report.title}</Link>
             {(report.team || report.report_type) && (
               <div className="reports-table-subtext">
                 {[report.team, report.report_type].filter(Boolean).join(' · ')}
