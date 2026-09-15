@@ -8,7 +8,7 @@ from database import db_session
 from logs import log_action
 from models import Client, ComponentReview, Contact, DistributionLink, FundData, Report, ReportTemplate, ReportTransition, User
 from renderers import CONTENT_TYPES, RENDERERS
-from report_content import resolve_report_content
+from report_content import resolve_report_content, reviewable_components
 from report_generator import generate_pdf
 from routes.auth import require_auth
 from workflow import InvalidTransition, apply_transition, requires_compliance
@@ -299,23 +299,13 @@ def revoke_distribution_link(report_id, link_id):
         db_session.commit()
     return jsonify(link.serialize())
 
-def _reviewable_components(report):
-    """The report's own template components that carry a review_role -- []
-    for legacy (template-less) reports, which have nothing to review."""
-    if not report.template_id:
-        return []
-    template = db_session.query(ReportTemplate).filter_by(id=report.template_id).first()
-    if not template:
-        return []
-    return [c for c in template.components_list() if c.get('review_role')]
-
 @reports_blueprint.get('/api/reports/<int:report_id>/review-checklist')
 @require_auth(roles=['admin', 'editor', 'viewer', 'compliance'])
 def get_review_checklist(report_id):
     report = _get_scoped_report(report_id)
     if not report:
         return jsonify({'message': 'Report not found'}), 404
-    components = _reviewable_components(report)
+    components = reviewable_components(report)
     reviews_by_component = {
         review.component_id: review for review in
         db_session.query(ComponentReview).filter_by(report_id=report.id).all()
@@ -340,7 +330,7 @@ def mark_component_reviewed(report_id, component_id):
     report = _get_scoped_report(report_id)
     if not report:
         return jsonify({'message': 'Report not found'}), 404
-    component = next((c for c in _reviewable_components(report) if c['id'] == component_id), None)
+    component = next((c for c in reviewable_components(report) if c['id'] == component_id), None)
     if not component:
         return jsonify({'message': 'Unknown or non-reviewable component_id'}), 404
 
@@ -365,7 +355,7 @@ def clear_component_review(report_id, component_id):
     report = _get_scoped_report(report_id)
     if not report:
         return jsonify({'message': 'Report not found'}), 404
-    component = next((c for c in _reviewable_components(report) if c['id'] == component_id), None)
+    component = next((c for c in reviewable_components(report) if c['id'] == component_id), None)
     if not component:
         return jsonify({'message': 'Unknown or non-reviewable component_id'}), 404
 

@@ -155,6 +155,16 @@ def _resolve_disclosures(template):
         for disclosure_id in disclosure_ids if disclosure_id in by_id
     ]
 
+def reviewable_components(report):
+    """The report's own template components that carry a review_role -- []
+    for legacy (template-less) reports, which have nothing to review."""
+    if not report.template_id:
+        return []
+    template = db_session.query(ReportTemplate).filter_by(id=report.template_id).first()
+    if not template:
+        return []
+    return [c for c in template.components_list() if c.get('review_role')]
+
 def resolve_report_content(report, template):
     client = db_session.query(Client).filter_by(id=report.client_id).first()
     components = []

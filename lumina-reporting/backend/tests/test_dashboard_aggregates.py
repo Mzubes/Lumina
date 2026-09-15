@@ -51,3 +51,46 @@ def test_failed_data_sources_surfaced(client, auth_headers, app):
     assert body['failedDataSources'] == [
         {'id': source_id, 'name': 'Broken Warehouse', 'message': 'Connection timed out'},
     ]
+
+def test_reports_by_week_has_fixed_window_and_zero_fills(client, auth_headers):
+    body = client.get('/api/dashboard', headers=auth_headers).get_json()
+    assert len(body['reportsByWeek']) == 8
+    assert all(row['count'] == 0 for row in body['reportsByWeek'])
+
+def test_reports_by_week_counts_current_week(client, auth_headers, sample_client):
+    _create_report(client, auth_headers, sample_client, title='Report A')
+    _create_report(client, auth_headers, sample_client, title='Report B')
+
+    body = client.get('/api/dashboard', headers=auth_headers).get_json()
+    # last bucket is always the current week -- both reports were just created.
+    assert body['reportsByWeek'][-1]['count'] == 2
+    assert sum(row['count'] for row in body['reportsByWeek']) == 2
+
+def _create_reviewable_report(client, editor_headers, auth_headers, sample_client):
+    components = [{"id": "c1", "type": "text_block", "title": "Disclosures", "review_role": "compliance",
+                   "data_binding": {"static_text": "All investments involve risk."}}]
+    template = client.post('/api/templates', headers=editor_headers, json={
+        'name': 'Reviewable Template', 'components': components,
+    }).get_json()
+    return client.post('/api/reports', headers=auth_headers, json={
+        'title': 'Reviewable Report', 'client_id': sample_client, 'template_id': template['id'],
+    }).get_json()
+
+def test_pending_component_reviews_only_counts_in_flight_reports(client, editor_headers, auth_headers, sample_client):
+    report = _create_reviewable_report(client, editor_headers, auth_headers, sample_client)
+
+    # still draft -> not counted yet.
+    draft_body = client.get('/api/dashboard', headers=auth_headers).get_json()
+    assert draft_body['pendingComponentReviews'] == 0
+
+    client.post(f"/api/reports/{report['id']}/submit", headers=auth_headers)
+    review_body = client.get('/api/dashboard', headers=auth_headers).get_json()
+    assert review_body['pendingComponentReviews'] == 1
+
+def test_pending_component_reviews_excludes_already_reviewed(client, editor_headers, auth_headers, compliance_headers, sample_client):
+    report = _create_reviewable_report(client, editor_headers, auth_headers, sample_client)
+    client.post(f"/api/reports/{report['id']}/submit", headers=auth_headers)
+    client.post(f"/api/reports/{report['id']}/components/c1/review", headers=compliance_headers)
+
+    body = client.get('/api/dashboard', headers=auth_headers).get_json()
+    assert body['pendingComponentReviews'] == 0

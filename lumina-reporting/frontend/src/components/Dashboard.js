@@ -1,8 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { DndContext, KeyboardSensor, PointerSensor, closestCenter, useSensor, useSensors } from '@dnd-kit/core';
+import { SortableContext, arrayMove, rectSortingStrategy, sortableKeyboardCoordinates, useSortable } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { apiFetch, isDemoMode } from '../api';
-import BarChart from './charts/BarChart';
-import CompositionBar from './charts/CompositionBar';
+import { DEFAULT_LAYOUT, WIDGETS_BY_ID, widgetsForRole } from './dashboardWidgets';
 
 const demoDashboard = {
   pendingApprovals: 3,
@@ -24,45 +26,55 @@ const demoDashboard = {
     { id: 2, name: 'July Performance Summary' },
     { id: 3, name: 'Investment Committee Factsheet' },
   ],
+  reportsByWeek: [
+    { label: 'W28', count: 1 }, { label: 'W29', count: 2 }, { label: 'W30', count: 1 }, { label: 'W31', count: 3 },
+    { label: 'W32', count: 2 }, { label: 'W33', count: 1 }, { label: 'W34', count: 4 }, { label: 'W35', count: 2 },
+  ],
+  pendingComponentReviews: 2,
 };
 
-const STATUS_ROWS = [
-  { key: 'draft', label: 'Draft', color: 'var(--c-draft)' },
-  { key: 'review', label: 'In review', color: 'var(--c-review)' },
-  { key: 'compliance', label: 'Compliance', color: 'var(--c-compliance)' },
-  { key: 'approved', label: 'Approved', color: 'var(--c-approved)' },
-  { key: 'distributed', label: 'Distributed', color: 'var(--c-distributed)' },
-];
+const layoutKey = (role) => `lumina_dashboard_layout_${role || 'viewer'}`;
 
-const CATEGORICAL_COLORS = ['var(--cat-1)', 'var(--cat-2)', 'var(--cat-3)', 'var(--cat-4)', 'var(--cat-5)', 'var(--cat-6)'];
+const loadLayout = (role) => {
+  try {
+    const raw = window.localStorage.getItem(layoutKey(role));
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed.visible)) return parsed.visible;
+    }
+  } catch { /* corrupt/blocked storage -- fall through to defaults */ }
+  return DEFAULT_LAYOUT[role] || DEFAULT_LAYOUT.viewer || [];
+};
 
-const VIEWS = [
-  { key: 'status', label: 'Production Pipeline', subtitle: 'Where every report currently sits in the production pipeline.' },
-  { key: 'team', label: 'By Team', subtitle: 'Report volume grouped by team.' },
-  { key: 'assetClass', label: 'By Asset Class', subtitle: 'Report volume grouped by the underlying fund’s asset class.' },
-  { key: 'client', label: 'By Client', subtitle: 'Report volume grouped by client.' },
-];
+const saveLayout = (role, visible) => {
+  try { window.localStorage.setItem(layoutKey(role), JSON.stringify({ visible })); } catch { /* per-viewer convenience only */ }
+};
 
-const toCategoricalData = (rows) => (rows || []).map((row, index) => ({
-  label: row.label,
-  value: row.count,
-  color: (row.label === 'Other' || row.label === 'Unassigned') ? 'var(--cat-other)' : CATEGORICAL_COLORS[index % CATEGORICAL_COLORS.length],
-}));
+const SortableWidget = ({ id, size, title, demo, onHide, children }) => {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
+  const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.4 : 1 };
 
-const getViewData = (key, dashboard) => {
-  if (key === 'status') {
-    return STATUS_ROWS.map(row => ({ label: row.label, color: row.color, value: dashboard.reportsByStatus?.[row.key] ?? 0 }));
-  }
-  const sourceKey = { team: 'reportsByTeam', assetClass: 'reportsByAssetClass', client: 'reportsByClient' }[key];
-  return toCategoricalData(dashboard[sourceKey]);
+  return (
+    <section ref={setNodeRef} style={style} className={`panel widget-card widget-size-${size} ${isDragging ? 'is-dragging' : ''}`}>
+      <div className="panel-header widget-card-header">
+        <button type="button" className="widget-drag-handle" aria-label={`Reorder ${title}`} {...attributes} {...listeners}>⠿</button>
+        <h2>{title}</h2>
+        {demo && <span className="demo-badge">Demo data</span>}
+        <button type="button" className="widget-hide-btn" aria-label={`Hide ${title}`} onClick={onHide}>×</button>
+      </div>
+      {children}
+    </section>
+  );
 };
 
 const Dashboard = () => {
+  const role = window.localStorage.getItem('lumina_role') || 'viewer';
+
   const [data, setData] = useState(null);
   // 'live' | 'demo' | 'unavailable' -- distinct from isDemoMode, so a real
   // fetch failure never gets silently presented as though it were real data.
   const [source, setSource] = useState(isDemoMode ? 'demo' : 'live');
-  const [view, setView] = useState('status');
+  const [visibleIds, setVisibleIds] = useState(() => loadLayout(role));
 
   useEffect(() => {
     if (isDemoMode) { setData(demoDashboard); return; }
@@ -72,9 +84,29 @@ const Dashboard = () => {
   }, []);
 
   const dashboard = data || demoDashboard;
-  const activeView = VIEWS.find(v => v.key === view) || VIEWS[0];
-  const chartData = getViewData(view, dashboard);
   const failedSources = dashboard.failedDataSources || [];
+
+  const availableWidgets = widgetsForRole(role);
+  const availableIds = new Set(availableWidgets.map(w => w.id));
+  const widgetIds = visibleIds.filter(id => availableIds.has(id) && WIDGETS_BY_ID[id]);
+  const hiddenWidgets = availableWidgets.filter(w => !widgetIds.includes(w.id));
+
+  const persistAndSet = (next) => { setVisibleIds(next); saveLayout(role, next); };
+  const handleHide = (id) => persistAndSet(widgetIds.filter(w => w !== id));
+  const handleAdd = (id) => { if (id) persistAndSet([...widgetIds, id]); };
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
+
+  const handleDragEnd = ({ active, over }) => {
+    if (!over || active.id === over.id) return;
+    const oldIndex = widgetIds.indexOf(active.id);
+    const newIndex = widgetIds.indexOf(over.id);
+    if (oldIndex === -1 || newIndex === -1) return;
+    persistAndSet(arrayMove(widgetIds, oldIndex, newIndex));
+  };
 
   return (
     <div className="dashboard">
@@ -93,51 +125,35 @@ const Dashboard = () => {
         </div>
       )}
 
-      <div className="quick-actions">
-        <Link to="/data-sources">Connect a data source</Link>
-        <Link to="/templates">New template</Link>
-        <Link to="/approvals">
-          Review approvals
-          {dashboard.pendingApprovals > 0 && <span className="badge-count">{dashboard.pendingApprovals}</span>}
-        </Link>
-        <Link to="/compliance">
-          Compliance queue
-          {dashboard.pendingCompliance > 0 && <span className="badge-count">{dashboard.pendingCompliance}</span>}
-        </Link>
+      <div className="dashboard-toolbar">
+        <p className="panel-subtitle">Drag a widget's handle to rearrange it, or hide/add widgets below.</p>
+        {hiddenWidgets.length > 0 && (
+          <select
+            className="dashboard-add-widget" value=""
+            onChange={(event) => { handleAdd(event.target.value); event.target.value = ''; }}
+          >
+            <option value="">+ Add widget…</option>
+            {hiddenWidgets.map(w => <option key={w.id} value={w.id}>{w.title}</option>)}
+          </select>
+        )}
       </div>
 
-      <section className="metric-grid">
-        <article className="metric-card"><span>Pending approvals</span><strong>{dashboard.pendingApprovals}</strong></article>
-        <article className="metric-card"><span>Pending compliance</span><strong>{dashboard.pendingCompliance ?? 0}</strong></article>
-        <article className="metric-card"><span>Total reports</span><strong>{dashboard.totalReports}</strong></article>
-        <article className="metric-card"><span>Distributed to clients</span><strong>{dashboard.reportsByStatus?.distributed ?? 0}</strong></article>
-      </section>
-
-      <section className="panel">
-        <div className="panel-header"><h2>Report volume</h2></div>
-        <div className="view-tabs">
-          {VIEWS.map(v => (
-            <button key={v.key} type="button" className={`view-tab ${view === v.key ? 'active' : ''}`} onClick={() => setView(v.key)}>
-              {v.label}
-            </button>
-          ))}
-        </div>
-        <p className="panel-subtitle">{activeView.subtitle}</p>
-        <BarChart title={activeView.label} data={chartData} />
-        {view === 'status' && (
-          <div className="dashboard-composition">
-            <h3 className="composition-heading">Pipeline mix</h3>
-            <CompositionBar title="Pipeline mix" data={chartData} />
+      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+        <SortableContext items={widgetIds} strategy={rectSortingStrategy}>
+          <div className="dashboard-grid">
+            {widgetIds.map((id) => {
+              const widget = WIDGETS_BY_ID[id];
+              if (!widget) return null;
+              return (
+                <SortableWidget key={id} id={id} size={widget.size} title={widget.title} demo={widget.demo} onHide={() => handleHide(id)}>
+                  {widget.render(dashboard, role)}
+                </SortableWidget>
+              );
+            })}
+            {widgetIds.length === 0 && <p className="panel-subtitle">No widgets on this dashboard yet — add one above.</p>}
           </div>
-        )}
-      </section>
-
-      <section className="panel"><h2>Recent reports</h2><ul className="report-list">
-        {dashboard.recentReports.map(report => (
-          <li key={report.id}>{report.name}</li>
-        ))}
-        {dashboard.recentReports.length === 0 && <li>No reports yet.</li>}
-      </ul></section>
+        </SortableContext>
+      </DndContext>
     </div>
   );
 };
