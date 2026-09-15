@@ -4,7 +4,10 @@ services:
     runtime: python
     plan: free
     rootDir: lumina-reporting/backend
-    buildCommand: pip install -r requirements.txt && alembic upgrade head
+    # seed-demo is idempotent (it checks for its own data and no-ops if
+    # already present), so it's safe to run on every deploy -- the free
+    # compute plan has no Shell access to run it by hand.
+    buildCommand: pip install -r requirements.txt && alembic upgrade head && flask --app app seed-demo
     startCommand: gunicorn app:app
     envVars:
       - key: PYTHON_VERSION

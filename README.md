@@ -132,17 +132,16 @@ way Render's is.
    and `REACT_APP_API_BASE_URL` is baked in at `lumina-frontend`'s build
    time, so both need a fresh deploy, not just a restart.
 5. The API's build step runs `alembic upgrade head` against the Neon
-   database, so the schema is ready but empty. Open the `lumina-api`
-   service's **Shell** tab in Render and run:
-   ```bash
-   flask --app app seed-demo
-   ```
-   This seeds a reverse-engineered Pzena Global Small Cap Focused Value
-   factsheet — real fund data, holdings, performance, a disclosure, a
-   12-component template, and a report already carried through the full
-   workflow to `distributed` — plus four logins to click around with
-   (all `@lumina.test`): `admin`/`admin-pass`, `editor`/`editor-pass`,
-   `compliance`/`compliance-pass`, `client`/`client-pass`.
+   database, then `flask --app app seed-demo` — both happen automatically
+   on every deploy (the free compute plan has no Shell access to run
+   commands by hand, and `seed-demo` no-ops if it's already seeded, so
+   running it on every build is safe). It seeds a reverse-engineered Pzena
+   Global Small Cap Focused Value factsheet — real fund data, holdings,
+   performance, a disclosure, a 12-component template, and a report
+   already carried through the full workflow to `distributed` — plus four
+   logins to click around with (all `@lumina.test`): `admin`/`admin-pass`,
+   `editor`/`editor-pass`, `compliance`/`compliance-pass`,
+   `client`/`client-pass`.
 6. Open the `lumina-frontend` URL and log in with any of the above.
 
 `lumina-api` is on Render's free tier and spins down after 15 minutes
