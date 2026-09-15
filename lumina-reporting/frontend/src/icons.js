@@ -40,3 +40,15 @@ export const IconLogIn = () => (
 export const IconLogOut = () => (
   <svg {...base}><path d="M10 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h4" /><path d="M15 17l5-5-5-5" /><path d="M20 12H8" /></svg>
 );
+
+export const IconBadge = () => (
+  <svg {...base}><circle cx="12" cy="9" r="6" /><path d="m8.5 14-1.8 7 5.3-3 5.3 3-1.8-7" /></svg>
+);
+
+export const IconPresentation = () => (
+  <svg {...base}><rect x="2.5" y="4" width="19" height="12" rx="1.5" /><path d="M8 20h8M12 16v4" /><path d="M7 12l3-3 2.5 2.5L17 7" /></svg>
+);
+
+export const IconShield = () => (
+  <svg {...base}><path d="M12 2.5 4.5 5.5v6c0 5 3.2 8.4 7.5 10 4.3-1.6 7.5-5 7.5-10v-6Z" /><path d="m8.5 12 2.4 2.4L16 9" /></svg>
+);

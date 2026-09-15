@@ -1,4 +1,4 @@
-COMPONENT_TYPES = {'holdings_table', 'performance_summary', 'text_block'}
+COMPONENT_TYPES = {'holdings_table', 'performance_summary', 'text_block', 'report_reference'}
 
 def validate_components(components):
     if not isinstance(components, list) or not components:
@@ -26,5 +26,7 @@ def validate_components(components):
             return 'each component needs a data_binding object'
         if comp_type == 'text_block' and not data_binding.get('static_text'):
             return 'text_block components need data_binding.static_text'
+        if comp_type == 'report_reference' and not isinstance(data_binding.get('report_id'), int):
+            return 'report_reference components need an integer data_binding.report_id'
 
     return None

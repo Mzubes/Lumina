@@ -42,7 +42,7 @@ def create_app(test_config=None):
 
     @app.cli.command('create-user')
     @click.option('--email', prompt=True)
-    @click.option('--role', type=click.Choice(['admin', 'editor', 'viewer', 'client']), default='admin')
+    @click.option('--role', type=click.Choice(['admin', 'editor', 'viewer', 'client', 'compliance']), default='admin')
     @click.option('--client-id', type=int, default=None, help="Required when --role client.")
     @click.password_option()
     def create_user(email, role, client_id, password):

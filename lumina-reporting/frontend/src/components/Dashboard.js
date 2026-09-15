@@ -5,8 +5,9 @@ import BarChart from './charts/BarChart';
 
 const demoDashboard = {
   pendingApprovals: 3,
+  pendingCompliance: 1,
   totalReports: 9,
-  reportsByStatus: { draft: 2, review: 3, approved: 1, distributed: 3 },
+  reportsByStatus: { draft: 2, review: 3, compliance: 1, approved: 1, distributed: 3 },
   reportsByTeam: [
     { label: 'Wealth Management', count: 4 }, { label: 'Institutional Sales', count: 3 }, { label: 'Unassigned', count: 2 },
   ],
@@ -27,6 +28,7 @@ const demoDashboard = {
 const STATUS_ROWS = [
   { key: 'draft', label: 'Draft', color: 'var(--c-draft)' },
   { key: 'review', label: 'In review', color: 'var(--c-review)' },
+  { key: 'compliance', label: 'Compliance', color: 'var(--c-compliance)' },
   { key: 'approved', label: 'Approved', color: 'var(--c-approved)' },
   { key: 'distributed', label: 'Distributed', color: 'var(--c-distributed)' },
 ];
@@ -97,10 +99,15 @@ const Dashboard = () => {
           Review approvals
           {dashboard.pendingApprovals > 0 && <span className="badge-count">{dashboard.pendingApprovals}</span>}
         </Link>
+        <Link to="/compliance">
+          Compliance queue
+          {dashboard.pendingCompliance > 0 && <span className="badge-count">{dashboard.pendingCompliance}</span>}
+        </Link>
       </div>
 
       <section className="metric-grid">
         <article className="metric-card"><span>Pending approvals</span><strong>{dashboard.pendingApprovals}</strong></article>
+        <article className="metric-card"><span>Pending compliance</span><strong>{dashboard.pendingCompliance ?? 0}</strong></article>
         <article className="metric-card"><span>Total reports</span><strong>{dashboard.totalReports}</strong></article>
         <article className="metric-card"><span>Distributed to clients</span><strong>{dashboard.reportsByStatus?.distributed ?? 0}</strong></article>
       </section>

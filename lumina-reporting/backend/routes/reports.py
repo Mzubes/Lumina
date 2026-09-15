@@ -16,7 +16,7 @@ reports_blueprint = Blueprint('reports', __name__)
 BACKEND_DIR = Path(__file__).resolve().parent.parent
 REPORTS_DIR = BACKEND_DIR / 'static' / 'reports'
 
-REPORT_TYPES = ['factsheet', 'performance', 'holdings', 'pitchbook', 'custom']
+REPORT_TYPES = ['factsheet', 'marketing', 'performance', 'holdings', 'pitchbook', 'meeting_pack', 'custom']
 
 def _scoped_query():
     query = db_session.query(Report)
@@ -212,4 +212,12 @@ reports_blueprint.add_url_rule(
 reports_blueprint.add_url_rule(
     '/api/reports/<int:report_id>/distribute', view_func=_transition_route('distribute', ['admin', 'editor']),
     methods=['POST'], endpoint='distribute_report',
+)
+reports_blueprint.add_url_rule(
+    '/api/reports/<int:report_id>/certify', view_func=_transition_route('certify', ['compliance']),
+    methods=['POST'], endpoint='certify_report',
+)
+reports_blueprint.add_url_rule(
+    '/api/reports/<int:report_id>/request-changes', view_func=_transition_route('request_changes', ['compliance']),
+    methods=['POST'], endpoint='request_changes_report',
 )

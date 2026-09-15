@@ -7,7 +7,7 @@ from routes.auth import require_auth
 
 dashboard_blueprint = Blueprint('dashboard', __name__)
 
-REPORT_STATUSES = ['draft', 'review', 'approved', 'distributed']
+REPORT_STATUSES = ['draft', 'review', 'compliance', 'approved', 'distributed']
 TOP_N = 6
 
 def _top_n_with_other(rows, other_label='Other', unassigned_label='Unassigned'):
@@ -30,6 +30,7 @@ def _top_n_with_other(rows, other_label='Other', unassigned_label='Unassigned'):
 @require_auth()
 def get_dashboard():
     pending_approvals = db_session.query(Report).filter_by(status='review').count()
+    pending_compliance = db_session.query(Report).filter_by(status='compliance').count()
 
     status_counts = dict(
         db_session.query(Report.status, func.count(Report.id)).group_by(Report.status).all()
@@ -65,6 +66,7 @@ def get_dashboard():
     )
     return jsonify({
         'pendingApprovals': pending_approvals,
+        'pendingCompliance': pending_compliance,
         'totalReports': sum(reports_by_status.values()),
         'reportsByStatus': reports_by_status,
         'reportsByTeam': _top_n_with_other(team_rows),

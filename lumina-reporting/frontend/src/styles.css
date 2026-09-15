@@ -28,6 +28,7 @@
   --c-review: #fab219;
   --c-approved: #0ca30c;
   --c-distributed: #3987e5;
+  --c-compliance: #9085e9;
   --c-critical: #d03b3b;
 
   /* categorical identity (Team/Client/Asset-class groupings) -- distinct role
@@ -290,6 +291,8 @@ select { appearance: none; background-image: linear-gradient(45deg, transparent 
 .status-approved::before { background: var(--c-approved); }
 .status-distributed { background: color-mix(in srgb, var(--c-distributed) 18%, transparent); color: #93c5fd; }
 .status-distributed::before { background: var(--c-distributed); }
+.status-compliance { background: color-mix(in srgb, var(--c-compliance) 18%, transparent); color: #c4bdf5; }
+.status-compliance::before { background: var(--c-compliance); }
 
 /* ---------- forms ---------- */
 

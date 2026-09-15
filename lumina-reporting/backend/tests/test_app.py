@@ -20,8 +20,9 @@ def test_dashboard_returns_data(client, auth_headers, sample_client):
     assert response.status_code == 200
     body = response.get_json()
     assert body['pendingApprovals'] == 1
+    assert body['pendingCompliance'] == 0
     assert body['totalReports'] == 1
-    assert body['reportsByStatus'] == {'draft': 0, 'review': 1, 'approved': 0, 'distributed': 0}
+    assert body['reportsByStatus'] == {'draft': 0, 'review': 1, 'compliance': 0, 'approved': 0, 'distributed': 0}
     assert body['reportsByTeam'] == [{'label': 'Unassigned', 'count': 1}]
     assert body['reportsByClient'] == [{'label': 'Acme Institutional', 'count': 1}]
     assert body['failedDataSources'] == []

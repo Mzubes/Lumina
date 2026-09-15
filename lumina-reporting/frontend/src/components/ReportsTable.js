@@ -3,6 +3,7 @@ import React from 'react';
 const STATUS_LABEL = {
   draft: 'Draft',
   review: 'In review',
+  compliance: 'Compliance review',
   approved: 'Approved',
   distributed: 'Distributed',
 };
@@ -12,6 +13,10 @@ const ACTIONS_BY_STATUS = {
   review: [
     { action: 'approve', label: 'Approve', roles: ['admin'] },
     { action: 'reject', label: 'Reject', roles: ['admin'] },
+  ],
+  compliance: [
+    { action: 'certify', label: 'Certify', roles: ['compliance'] },
+    { action: 'request-changes', label: 'Request changes', roles: ['compliance'] },
   ],
   approved: [{ action: 'distribute', label: 'Distribute', roles: ['admin', 'editor'] }],
   distributed: [],

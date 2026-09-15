@@ -61,6 +61,15 @@ def viewer_headers(app, client):
     return _login_headers(client, 'viewer@example.com', 'viewer-password')
 
 @pytest.fixture()
+def compliance_headers(app, client):
+    with app.app_context():
+        user = User(email='compliance@example.com', role='compliance')
+        user.set_password('compliance-password')
+        db_session.add(user)
+        db_session.commit()
+    return _login_headers(client, 'compliance@example.com', 'compliance-password')
+
+@pytest.fixture()
 def sample_client(app):
     with app.app_context():
         institution = Client(name='Acme Institutional', contact_email='ops@acme.example')

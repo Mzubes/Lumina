@@ -2,15 +2,18 @@ import React from 'react';
 import { HashRouter, NavLink, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import Dashboard from './components/Dashboard';
 import Approvals from './components/approvals';
+import Compliance from './components/compliance';
 import DataHub from './components/datahub';
 import DataSources from './components/datasources';
+import Marketing from './components/marketing';
+import Pitchbooks from './components/pitchbooks';
 import Reports from './components/reports';
 import Templates from './components/templates';
 import Login from './pages/Login';
 import ClientPortal from './pages/ClientPortal';
 import {
-  IconCheckCircle, IconDashboard, IconDatabase, IconDocument,
-  IconLayout, IconLogIn, IconLogOut, IconPlug, IconUsers,
+  IconBadge, IconCheckCircle, IconDashboard, IconDatabase, IconDocument,
+  IconLayout, IconLogIn, IconLogOut, IconPlug, IconPresentation, IconShield, IconUsers,
 } from './icons';
 
 const navSections = [
@@ -23,11 +26,16 @@ const navSections = [
     ['/templates', 'Templates', IconLayout],
     ['/reports', 'Reports', IconDocument],
     ['/approvals', 'Approvals', IconCheckCircle],
+    ['/compliance', 'Compliance', IconShield],
+  ] },
+  { label: 'Marketing', items: [
+    ['/marketing', 'Fact Sheets & Marketing', IconBadge],
+    ['/pitch-books', 'Pitch Books & Meeting Packs', IconPresentation],
   ] },
   { label: 'Client', items: [['/client-portal', 'Client Portal', IconUsers]] },
 ];
 
-const ROLE_LABEL = { admin: 'Admin', editor: 'Editor', viewer: 'Viewer', client: 'Client' };
+const ROLE_LABEL = { admin: 'Admin', editor: 'Editor', viewer: 'Viewer', client: 'Client', compliance: 'Compliance' };
 
 function Sidebar() {
   // useLocation forces a re-render on every navigation (including the
@@ -93,6 +101,9 @@ function App() {
             <Route path="/templates" element={<Templates />} />
             <Route path="/reports" element={<Reports />} />
             <Route path="/approvals" element={<Approvals />} />
+            <Route path="/compliance" element={<Compliance />} />
+            <Route path="/marketing" element={<Marketing />} />
+            <Route path="/pitch-books" element={<Pitchbooks />} />
             <Route path="/distribution" element={<Navigate to="/reports" replace />} />
             <Route path="/client-portal" element={<ClientPortal />} />
             <Route path="/login" element={<Login />} />

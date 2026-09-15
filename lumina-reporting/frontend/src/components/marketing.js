@@ -1,59 +1,41 @@
 import React, { useEffect, useState } from 'react';
 import { apiDownload, apiFetch, isDemoMode } from '../api';
 import ReportsTable from './ReportsTable';
+import { buildQuery, emptyFilters } from './reports';
 
-const demoReports = [
-  { id: 1, title: 'Q2 Institutional Portfolio Report', client_id: 1, status: 'draft', team: 'Wealth Management', report_type: 'holdings', created_at: null },
-  { id: 2, title: 'July Performance Summary', client_id: 1, status: 'review', team: 'Institutional Sales', report_type: 'performance', created_at: null },
+const MARKETING_TYPES = { factsheet: 'Factsheet', marketing: 'Marketing Material' };
+
+const TYPE_PILLS = [
+  { value: '', label: 'All' },
+  { value: 'factsheet', label: 'Factsheets' },
+  { value: 'marketing', label: 'Marketing Material' },
+];
+
+const demoMarketing = [
   { id: 3, title: 'Investment Committee Factsheet', client_id: 2, status: 'distributed', team: 'Wealth Management', report_type: 'factsheet', created_at: null },
 ];
 
-const STATUS_PILLS = [
-  { value: '', label: 'All' },
-  { value: 'draft', label: 'Draft' },
-  { value: 'review', label: 'In review' },
-  { value: 'compliance', label: 'Compliance' },
-  { value: 'approved', label: 'Approved' },
-  { value: 'distributed', label: 'Distributed' },
-];
-
-export const REPORT_TYPE_LABELS = {
-  factsheet: 'Factsheet',
-  marketing: 'Marketing Material',
-  performance: 'Performance Report',
-  holdings: 'Holdings Report',
-  pitchbook: 'Pitchbook',
-  meeting_pack: 'Meeting Pack',
-  custom: 'Custom',
-};
-
-export const emptyFilters = { status: '', client_id: '', team: '', report_type: '', asset_class: '', q: '' };
-
-export const buildQuery = (filters) => {
-  const params = new URLSearchParams();
-  Object.entries(filters).forEach(([key, value]) => { if (value) params.set(key, value); });
-  const query = params.toString();
-  return query ? `?${query}` : '';
-};
-
-const Reports = () => {
+const Marketing = () => {
   const [reports, setReports] = useState([]);
   const [error, setError] = useState('');
   const role = window.localStorage.getItem('lumina_role') || '';
   const canCreate = ['admin', 'editor'].includes(role);
 
+  const [typeFilter, setTypeFilter] = useState('');
   const [filters, setFilters] = useState(emptyFilters);
   const [searchInput, setSearchInput] = useState('');
-  const [facets, setFacets] = useState({ teams: [], reportTypes: [], assetClasses: [] });
+  const [facets, setFacets] = useState({ teams: [], assetClasses: [] });
   const [clients, setClients] = useState([]);
   const [templates, setTemplates] = useState([]);
 
-  const [form, setForm] = useState({ title: '', client_id: '', team: '', report_type: '', template_id: '' });
+  const [form, setForm] = useState({ title: '', client_id: '', team: '', report_type: 'factsheet', template_id: '' });
   const [formMessage, setFormMessage] = useState('');
 
   const loadReports = () => {
-    if (isDemoMode) { setReports(demoReports); return; }
-    apiFetch(`/api/reports${buildQuery(filters)}`).then(setReports).catch(() => setReports(demoReports));
+    if (isDemoMode) { setReports(demoMarketing); return; }
+    apiFetch(`/api/reports${buildQuery(filters)}`)
+      .then(all => setReports(all.filter(r => r.report_type === 'factsheet' || r.report_type === 'marketing')))
+      .catch(() => setReports(demoMarketing));
   };
 
   useEffect(loadReports, [filters]);
@@ -70,9 +52,13 @@ const Reports = () => {
     return () => clearTimeout(handle);
   }, [searchInput]);
 
+  useEffect(() => {
+    setFilters(current => ({ ...current, report_type: typeFilter }));
+  }, [typeFilter]);
+
   const updateFilter = (key, value) => setFilters(current => ({ ...current, [key]: value }));
-  const clearFilters = () => { setFilters(emptyFilters); setSearchInput(''); };
-  const filtersActive = Object.values(filters).some(Boolean);
+  const clearFilters = () => { setFilters(emptyFilters); setSearchInput(''); setTypeFilter(''); };
+  const filtersActive = Object.entries(filters).some(([key, value]) => key !== 'report_type' && Boolean(value)) || Boolean(typeFilter);
 
   const handleAction = async (report, action) => {
     setError('');
@@ -100,23 +86,25 @@ const Reports = () => {
           title: form.title,
           client_id: Number(form.client_id),
           team: form.team || undefined,
-          report_type: form.report_type || undefined,
+          report_type: form.report_type,
           template_id: form.template_id ? Number(form.template_id) : undefined,
         }),
       });
-      setForm({ title: '', client_id: '', team: '', report_type: '', template_id: '' });
+      setForm({ title: '', client_id: '', team: '', report_type: 'factsheet', template_id: '' });
       loadReports();
-      apiFetch('/api/reports/facets').then(setFacets).catch(() => {});
     } catch (requestError) { setFormMessage(requestError.message); }
   };
 
   return (
-    <div className="reports">
-      <div className="page-heading"><div><span className="eyebrow">Production</span><h1>Reports</h1></div>{isDemoMode && <span className="demo-badge">Demo data</span>}</div>
+    <div className="marketing">
+      <div className="page-heading">
+        <div><span className="eyebrow">Production</span><h1>Fact Sheets &amp; Marketing</h1></div>
+        {isDemoMode && <span className="demo-badge">Demo data</span>}
+      </div>
 
       {canCreate && (
         <section className="panel">
-          <h2>New report</h2>
+          <h2>New fact sheet or marketing piece</h2>
           <form onSubmit={handleCreate}>
             <label>Title
               <input value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} required />
@@ -130,16 +118,15 @@ const Reports = () => {
             <label>Team
               <input
                 value={form.team} onChange={e => setForm({ ...form, team: e.target.value })}
-                list="team-suggestions" placeholder="e.g. Wealth Management"
+                list="marketing-team-suggestions" placeholder="e.g. Institutional Sales"
               />
-              <datalist id="team-suggestions">
+              <datalist id="marketing-team-suggestions">
                 {facets.teams.map(team => <option key={team} value={team} />)}
               </datalist>
             </label>
-            <label>Report type
+            <label>Type
               <select value={form.report_type} onChange={e => setForm({ ...form, report_type: e.target.value })}>
-                <option value="">Not specified</option>
-                {Object.entries(REPORT_TYPE_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                {Object.entries(MARKETING_TYPES).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
               </select>
             </label>
             <label>Template (optional — leave blank for a plain PDF)
@@ -149,7 +136,7 @@ const Reports = () => {
               </select>
             </label>
             <div className="form-actions">
-              <button type="submit">Create report</button>
+              <button type="submit">Create</button>
             </div>
           </form>
           {formMessage && <p className="form-message">{formMessage}</p>}
@@ -159,11 +146,11 @@ const Reports = () => {
       <section className="panel">
         <div className="filter-bar">
           <div className="filter-pills">
-            {STATUS_PILLS.map(pill => (
+            {TYPE_PILLS.map(pill => (
               <button
                 key={pill.value} type="button"
-                className={`filter-pill ${filters.status === pill.value ? 'active' : ''}`}
-                onClick={() => updateFilter('status', pill.value)}
+                className={`filter-pill ${typeFilter === pill.value ? 'active' : ''}`}
+                onClick={() => setTypeFilter(pill.value)}
               >
                 {pill.label}
               </button>
@@ -177,13 +164,13 @@ const Reports = () => {
             <option value="">All teams</option>
             {facets.teams.map(team => <option key={team} value={team}>{team}</option>)}
           </select>
-          <select className="filter-select" value={filters.report_type} onChange={e => updateFilter('report_type', e.target.value)}>
-            <option value="">All types</option>
-            {facets.reportTypes.map(type => <option key={type} value={type}>{REPORT_TYPE_LABELS[type] || type}</option>)}
-          </select>
-          <select className="filter-select" value={filters.asset_class} onChange={e => updateFilter('asset_class', e.target.value)}>
-            <option value="">All asset classes</option>
-            {facets.assetClasses.map(assetClass => <option key={assetClass} value={assetClass}>{assetClass}</option>)}
+          <select className="filter-select" value={filters.status} onChange={e => updateFilter('status', e.target.value)}>
+            <option value="">All statuses</option>
+            <option value="draft">Draft</option>
+            <option value="review">In review</option>
+            <option value="compliance">Compliance</option>
+            <option value="approved">Approved</option>
+            <option value="distributed">Distributed</option>
           </select>
           <input
             className="filter-search" type="search" placeholder="Search title…"
@@ -191,11 +178,14 @@ const Reports = () => {
           />
           {filtersActive && <button type="button" className="filter-clear" onClick={clearFilters}>Clear filters</button>}
         </div>
-        <ReportsTable reports={reports} role={role} onAction={handleAction} onExport={handleExport} />
+        <ReportsTable
+          reports={reports} role={role} onAction={handleAction} onExport={handleExport}
+          emptyMessage="No fact sheets or marketing materials yet."
+        />
       </section>
       {error && <p className="form-message">{error}</p>}
     </div>
   );
 };
 
-export default Reports;
+export default Marketing;

@@ -1,7 +1,7 @@
 import datetime
 
 from database import db_session
-from models import Client, Holding, PerformanceSnapshot
+from models import Client, Holding, PerformanceSnapshot, Report, ReportTemplate
 
 def _scoped(query, report):
     query = query.filter_by(client_id=report.client_id)
@@ -77,10 +77,50 @@ def _resolve_text_block(report, component):
         'text': component.get('data_binding', {}).get('static_text', ''),
     }
 
+def _placeholder(title, text):
+    return [{'type': 'text_block', 'title': title, 'text': text}]
+
+def _resolve_referenced_components(referenced_report, referenced_template):
+    """Resolve the referenced report's own components against ITS data. One
+    level of inlining only -- a referenced report's own report_reference
+    components (if any) become a placeholder rather than recursing, so a
+    cycle can't be constructed and a deck can't balloon arbitrarily deep."""
+    inlined = []
+    for inner_component in referenced_template.components_list():
+        inner_type = inner_component.get('type')
+        if inner_type == 'report_reference':
+            inlined.extend(_placeholder(
+                inner_component.get('title', 'Referenced report'),
+                '[Nested report references are not supported]',
+            ))
+            continue
+        resolver = RESOLVERS.get(inner_type)
+        if resolver:
+            inlined.append(resolver(referenced_report, inner_component))
+    return inlined
+
+def _resolve_report_reference(report, component):
+    data_binding = component.get('data_binding', {})
+    referenced_id = data_binding.get('report_id')
+    fallback_title = component.get('title', 'Referenced report')
+
+    referenced_report = db_session.query(Report).filter_by(id=referenced_id).first()
+    if not referenced_report or referenced_report.client_id != report.client_id:
+        return _placeholder(fallback_title, '[Referenced report not found or not accessible]')
+    if not referenced_report.template_id:
+        return _placeholder(fallback_title, '[Referenced report has no structured content]')
+
+    referenced_template = db_session.query(ReportTemplate).filter_by(id=referenced_report.template_id).first()
+    if not referenced_template:
+        return _placeholder(fallback_title, '[Referenced report template no longer exists]')
+
+    return _resolve_referenced_components(referenced_report, referenced_template)
+
 RESOLVERS = {
     'holdings_table': _resolve_holdings_table,
     'performance_summary': _resolve_performance_summary,
     'text_block': _resolve_text_block,
+    'report_reference': _resolve_report_reference,
 }
 
 def resolve_report_content(report, template):
@@ -88,8 +128,13 @@ def resolve_report_content(report, template):
     components = []
     for component in template.components_list():
         resolver = RESOLVERS.get(component.get('type'))
-        if resolver:
-            components.append(resolver(report, component))
+        if not resolver:
+            continue
+        result = resolver(report, component)
+        if isinstance(result, list):
+            components.extend(result)
+        else:
+            components.append(result)
     return {
         'report_title': report.title,
         'client_name': client.name if client else None,
