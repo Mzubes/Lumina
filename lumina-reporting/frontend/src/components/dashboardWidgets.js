@@ -65,20 +65,25 @@ const ReportVolumeWidget = ({ dashboard }) => {
 const QUICK_ACTIONS = [
   { to: '/data-sources', label: 'Connect a data source', roles: ['admin', 'editor'] },
   { to: '/templates', label: 'New template', roles: ['admin', 'editor'] },
-  { to: '/approvals', label: 'Review approvals', roles: ['admin'], countKey: 'pendingApprovals' },
-  { to: '/compliance', label: 'Compliance queue', roles: ['admin', 'compliance'], countKey: 'pendingCompliance' },
+  // Approvals + Compliance were two separate quick actions; My Queue merges
+  // them into one destination, badge count summed across both -- component
+  // review counts are role-specific and not worth the added complexity here.
+  { to: '/queue', label: 'My Queue', roles: ['admin', 'editor', 'compliance'], countKeys: ['pendingApprovals', 'pendingCompliance'] },
 ];
 
 const QuickActionsWidget = ({ dashboard, role }) => {
   const actions = QUICK_ACTIONS.filter(action => action.roles.includes(role));
   return (
     <div className="quick-actions">
-      {actions.map(action => (
-        <Link key={action.to} to={action.to}>
-          {action.label}
-          {action.countKey && dashboard[action.countKey] > 0 && <span className="badge-count">{dashboard[action.countKey]}</span>}
-        </Link>
-      ))}
+      {actions.map((action) => {
+        const count = (action.countKeys || []).reduce((sum, key) => sum + (dashboard[key] || 0), 0);
+        return (
+          <Link key={action.to} to={action.to}>
+            {action.label}
+            {count > 0 && <span className="badge-count">{count}</span>}
+          </Link>
+        );
+      })}
       {actions.length === 0 && <p className="panel-subtitle">No quick actions for this role.</p>}
     </div>
   );

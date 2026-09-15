@@ -62,17 +62,25 @@ const ClientPortal = () => {
 
   return (
     <div className="client-portal">
-      <div className="page-heading">
-        <div><span className="eyebrow">Client experience</span><h1>Client Portal</h1></div>
-        {isDemoMode && <span className="demo-badge">Demo data</span>}
+      <div className="client-portal-hero">
+        <div className="client-portal-hero-text">
+          <span className="eyebrow">Client experience</span>
+          <h1>Welcome back.</h1>
+          <p className="client-portal-hero-sub">
+            Your portfolio and the reports your advisor has shared with you, in one place.
+          </p>
+        </div>
+        <div className="client-portal-hero-chips">
+          {portfolio && portfolio.asOfDate && <span className="client-portal-asof-chip">As of {portfolio.asOfDate}</span>}
+          {isDemoMode && <span className="demo-badge">Demo data</span>}
+        </div>
       </div>
 
-      {hasPortfolio && (
+      {hasPortfolio ? (
         <>
           {portfolio.performance.length > 0 && (
             <section className="panel">
               <div className="panel-header"><h2>Performance</h2></div>
-              {portfolio.asOfDate && <p className="panel-subtitle">As of {portfolio.asOfDate}</p>}
               <div className="metric-grid">
                 {portfolio.performance.map(row => {
                   const hasBenchmark = row.benchmark_return_pct != null;
@@ -121,6 +129,14 @@ const ClientPortal = () => {
             </section>
           )}
         </>
+      ) : (
+        <section className="panel client-portal-empty">
+          <h2>Your portfolio is on its way</h2>
+          <p>
+            Your holdings and performance will appear here once your advisor connects your
+            account. Any reports already shared with you are listed below.
+          </p>
+        </section>
       )}
 
       <section className="panel"><h2>Your reports</h2><ul className="report-list">
@@ -132,7 +148,7 @@ const ClientPortal = () => {
               : <button disabled>View PDF</button>}
           </li>
         ))}
-        {reports.length === 0 && <li>No reports have been distributed to you yet.</li>}
+        {reports.length === 0 && <li className="client-portal-reports-empty">No reports have been distributed to you yet.</li>}
       </ul></section>
     </div>
   );

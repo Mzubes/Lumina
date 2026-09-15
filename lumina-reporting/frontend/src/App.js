@@ -1,13 +1,12 @@
 import React from 'react';
 import { HashRouter, NavLink, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import Dashboard from './components/Dashboard';
-import Approvals from './components/approvals';
 import Clients from './components/clients';
-import Compliance from './components/compliance';
 import DataHub from './components/datahub';
 import DataSources from './components/datasources';
 import Disclosures from './components/disclosures';
 import Marketing from './components/marketing';
+import MyQueue from './components/MyQueue';
 import Pitchbooks from './components/pitchbooks';
 import Reports from './components/reports';
 import ReportDetail from './components/ReportDetail';
@@ -17,29 +16,45 @@ import ClientPortal from './pages/ClientPortal';
 import PublicReport from './pages/PublicReport';
 import {
   IconBadge, IconBriefcase, IconCheckCircle, IconClipboard, IconDashboard, IconDatabase, IconDocument,
-  IconLayout, IconLogIn, IconLogOut, IconPlug, IconPresentation, IconShield, IconUsers,
+  IconLayout, IconLogIn, IconLogOut, IconPlug, IconPresentation, IconUsers,
 } from './icons';
 
+// Staff roles -- every non-client role. `client` gets its own separate,
+// much shorter nav below rather than a filtered-down version of this one.
+const STAFF_ROLES = ['admin', 'editor', 'viewer', 'compliance'];
+// Only roles that can actually act on at least one queue item (approve,
+// certify, or a component review assigned to them) -- a viewer's queue
+// would always be empty, so it isn't offered to them at all.
+const QUEUE_ROLES = ['admin', 'editor', 'compliance'];
+
+// Each item's 4th element is the roles that see it; omitted = every staff role.
 const navSections = [
-  { label: 'Overview', items: [['/', 'Dashboard', IconDashboard]] },
+  { label: 'Overview', items: [['/', 'Dashboard', IconDashboard, STAFF_ROLES]] },
   { label: 'Data', items: [
-    ['/data-hub', 'Data Hub', IconDatabase],
-    ['/data-sources', 'Data Sources', IconPlug],
+    ['/data-hub', 'Data Hub', IconDatabase, STAFF_ROLES],
+    ['/data-sources', 'Data Sources', IconPlug, STAFF_ROLES],
   ] },
   { label: 'Production', items: [
-    ['/templates', 'Templates', IconLayout],
-    ['/reports', 'Reports', IconDocument],
-    ['/approvals', 'Approvals', IconCheckCircle],
-    ['/compliance', 'Compliance', IconShield],
+    ['/templates', 'Templates', IconLayout, STAFF_ROLES],
+    ['/reports', 'Reports', IconDocument, STAFF_ROLES],
+    ['/queue', 'My Queue', IconCheckCircle, QUEUE_ROLES],
   ] },
   { label: 'Marketing', items: [
-    ['/marketing', 'Fact Sheets & Marketing', IconBadge],
-    ['/pitch-books', 'Pitch Books & Meeting Packs', IconPresentation],
+    ['/marketing', 'Fact Sheets & Marketing', IconBadge, STAFF_ROLES],
+    ['/pitch-books', 'Pitch Books & Meeting Packs', IconPresentation, STAFF_ROLES],
   ] },
   { label: 'Admin', items: [
-    ['/clients', 'Clients & Contacts', IconBriefcase],
-    ['/disclosures', 'Disclosures', IconClipboard],
+    ['/clients', 'Clients & Contacts', IconBriefcase, STAFF_ROLES],
+    ['/disclosures', 'Disclosures', IconClipboard, STAFF_ROLES],
   ] },
+  // Staff preview of the client-facing portal -- admin only, not a working
+  // task for editor/viewer/compliance.
+  { label: 'Client', items: [['/client-portal', 'Client Portal (preview)', IconUsers, ['admin']]] },
+];
+
+// A client's entire nav -- not a filtered-down staff nav, a separate one.
+// Nothing above is relevant to them, so nothing above is offered.
+const clientNavSections = [
   { label: 'Client', items: [['/client-portal', 'Client Portal', IconUsers]] },
 ];
 
@@ -61,6 +76,13 @@ function Sidebar() {
     navigate('/login');
   };
 
+  const sections = (role === 'client' ? clientNavSections : navSections)
+    .map(section => ({
+      ...section,
+      items: section.items.filter(([, , , roles]) => !roles || roles.includes(role)),
+    }))
+    .filter(section => section.items.length > 0);
+
   return (
     <aside className="sidebar">
       <div className="brand-row">
@@ -71,7 +93,7 @@ function Sidebar() {
         </div>
       </div>
       <nav>
-        {navSections.map(section => (
+        {sections.map(section => (
           <React.Fragment key={section.label}>
             <div className="nav-section-label">{section.label}</div>
             {section.items.map(([to, label, Icon]) => (
@@ -118,8 +140,10 @@ function AuthenticatedShell() {
           <Route path="/templates" element={<RequireAuth><Templates /></RequireAuth>} />
           <Route path="/reports" element={<RequireAuth><Reports /></RequireAuth>} />
           <Route path="/reports/:id" element={<RequireAuth><ReportDetail /></RequireAuth>} />
-          <Route path="/approvals" element={<RequireAuth><Approvals /></RequireAuth>} />
-          <Route path="/compliance" element={<RequireAuth><Compliance /></RequireAuth>} />
+          <Route path="/queue" element={<RequireAuth><MyQueue /></RequireAuth>} />
+          {/* Retired paths -- keep old links/bookmarks working instead of a silent Dashboard redirect. */}
+          <Route path="/approvals" element={<Navigate to="/queue" replace />} />
+          <Route path="/compliance" element={<Navigate to="/queue" replace />} />
           <Route path="/marketing" element={<RequireAuth><Marketing /></RequireAuth>} />
           <Route path="/pitch-books" element={<RequireAuth><Pitchbooks /></RequireAuth>} />
           <Route path="/clients" element={<RequireAuth><Clients /></RequireAuth>} />

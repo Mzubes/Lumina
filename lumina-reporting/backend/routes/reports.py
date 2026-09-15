@@ -369,3 +369,51 @@ def clear_component_review(report_id, component_id):
     db_session.delete(review)
     db_session.commit()
     return '', 204
+
+@reports_blueprint.get('/api/reports/my-queue')
+@require_auth(roles=['admin', 'editor', 'compliance'])
+def get_my_queue():
+    """Everything actionable by the caller, in one place, each with why it's
+    there -- merges the old separate Approvals/Compliance queues with
+    pending component reviews (previously only a dashboard count, never a
+    list). A report needing more than one thing appears once with multiple
+    reasons, not once per reason."""
+    role = g.current_user.get('role')
+    queue = {}
+
+    def add_reason(report, **reason):
+        entry = queue.setdefault(report.id, {'report': report, 'reasons': []})
+        entry['reasons'].append(reason)
+
+    if role == 'admin':
+        for report in db_session.query(Report).filter_by(status='review').all():
+            add_reason(report, type='approval', label='Needs your approval')
+    if role == 'compliance':
+        for report in db_session.query(Report).filter_by(status='compliance').all():
+            add_reason(report, type='compliance', label='Needs your compliance certification')
+
+    # Same in-flight scoping as dashboard.py's _pending_component_reviews().
+    in_flight = (
+        db_session.query(Report)
+        .filter(Report.template_id.isnot(None), Report.status.in_(['review', 'compliance']))
+        .all()
+    )
+    for report in in_flight:
+        mine = [c for c in reviewable_components(report) if role == 'admin' or c['review_role'] == role]
+        if not mine:
+            continue
+        reviewed_ids = {
+            row.component_id for row in
+            db_session.query(ComponentReview.component_id).filter_by(report_id=report.id).all()
+        }
+        pending = [c for c in mine if c['id'] not in reviewed_ids]
+        if pending:
+            count = len(pending)
+            add_reason(
+                report, type='component_review',
+                label=f"{count} component{'s' if count != 1 else ''} {'need' if count != 1 else 'needs'} your review",
+                components=[c.get('title') for c in pending],
+            )
+
+    entries = sorted(queue.values(), key=lambda entry: entry['report'].created_at or datetime.datetime.min, reverse=True)
+    return jsonify([{**entry['report'].serialize(), 'reasons': entry['reasons']} for entry in entries])
