@@ -1,9 +1,3 @@
-databases:
-  - name: lumina-db
-    plan: free
-    databaseName: lumina
-    user: lumina
-
 services:
   - type: web
     name: lumina-api
@@ -19,10 +13,12 @@ services:
         generateValue: true
       - key: JWT_SECRET_KEY
         generateValue: true
+      # A Render free account allows only one free-tier Postgres database
+      # total, so this isn't provisioned here -- paste a connection string
+      # from a free external Postgres (e.g. Neon) instead. See README
+      # "Deploy to Render".
       - key: DATABASE_URL
-        fromDatabase:
-          name: lumina-db
-          property: connectionString
+        sync: false
       # Fill in once lumina-frontend has a URL (see README "Deploy to Render").
       - key: CORS_ORIGINS
         sync: false

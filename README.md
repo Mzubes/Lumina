@@ -93,29 +93,45 @@ production since there's no background task queue yet.
 
 ## Deploy to Render (backend + frontend, one click through)
 
-`render.yaml` at the repo root is a Render Blueprint defining three
-resources: a free Postgres database (`lumina-db`), the Flask API as a web
-service (`lumina-api`), and the React app as a static site
-(`lumina-frontend`). It runs against any branch, not just `main`.
+`render.yaml` at the repo root is a Render Blueprint defining two
+resources: the Flask API as a web service (`lumina-api`) and the React app
+as a static site (`lumina-frontend`). It runs against any branch, not just
+`main`.
 
-1. In the Render dashboard: **New > Blueprint**, connect this repository,
+The database is deliberately *not* provisioned by the blueprint: a Render
+free account allows only one active free-tier Postgres total, so adding a
+second one here fails outright if you already have one elsewhere. Instead,
+`lumina-api`'s `DATABASE_URL` is left blank for you to point at any
+Postgres database you already have, or a free one from
+[Neon](https://neon.tech) — Neon's free tier isn't capped per-account the
+way Render's is.
+
+1. **Database**: sign up at [neon.tech](https://neon.tech) (free), create a
+   project, and copy its connection string (Dashboard → Connection Details
+   → looks like `postgresql://user:password@ep-xxxx.aws.neon.tech/dbname`).
+2. In the Render dashboard: **New > Blueprint**, connect this repository,
    and pick the branch you want deployed (e.g.
    `claude/repository-code-review-a7hzot`). Render reads `render.yaml` and
-   proposes all three resources — click **Apply**.
-2. `SECRET_KEY`, `JWT_SECRET_KEY`, and `DATABASE_URL` are generated/wired
-   automatically. Two values can't be known until both services exist, so
-   fill them in by hand in the Render dashboard once the first deploy
-   finishes:
-   - `lumina-api` → Environment → `CORS_ORIGINS` = the `lumina-frontend`
-     URL Render assigned (e.g. `https://lumina-frontend.onrender.com`).
-   - `lumina-frontend` → Environment → `REACT_APP_API_BASE_URL` = the
-     `lumina-api` URL Render assigned (e.g.
-     `https://lumina-api.onrender.com`).
+   proposes both resources.
+3. Before clicking **Apply**, Render asks for the `sync: false` values —
+   fill in what you can now:
+   - `lumina-api` → `DATABASE_URL` = the Neon connection string from step 1.
+   - `lumina-api` → `CORS_ORIGINS` and `lumina-frontend` → `REACT_APP_API_BASE_URL`
+     can't be known yet (they reference each other's URL, and neither
+     service exists until after this deploy) — leave them blank for now,
+     click **Apply**, and come back to them next.
+4. Once both services have deployed once and you can see their assigned
+   URLs, fill in the two values from step 3 in each service's Environment
+   tab:
+   - `lumina-api` → `CORS_ORIGINS` = the `lumina-frontend` URL (e.g.
+     `https://lumina-frontend.onrender.com`).
+   - `lumina-frontend` → `REACT_APP_API_BASE_URL` = the `lumina-api` URL
+     (e.g. `https://lumina-api.onrender.com`).
    Redeploy both services after setting these (Manual Deploy → Deploy
    latest commit) — `CORS_ORIGINS` takes effect on `lumina-api`'s restart,
    and `REACT_APP_API_BASE_URL` is baked in at `lumina-frontend`'s build
    time, so both need a fresh deploy, not just a restart.
-3. The API's build step runs `alembic upgrade head` against the fresh
+5. The API's build step runs `alembic upgrade head` against the Neon
    database, so the schema is ready but empty. Open the `lumina-api`
    service's **Shell** tab in Render and run:
    ```bash
@@ -127,11 +143,12 @@ service (`lumina-api`), and the React app as a static site
    workflow to `distributed` — plus four logins to click around with
    (all `@lumina.test`): `admin`/`admin-pass`, `editor`/`editor-pass`,
    `compliance`/`compliance-pass`, `client`/`client-pass`.
-4. Open the `lumina-frontend` URL and log in with any of the above.
+6. Open the `lumina-frontend` URL and log in with any of the above.
 
-Both services are on Render's free tier: the API spins down after 15
-minutes idle (the first request after that takes ~30-50s to wake it up),
-and the free Postgres database expires after 30 days unless upgraded.
+`lumina-api` is on Render's free tier and spins down after 15 minutes
+idle — the first request after that takes ~30-50s to wake it up. Neon's
+free tier has its own idle/storage limits; see their pricing page if the
+database stops responding after a long gap.
 
 ## Verification
 
