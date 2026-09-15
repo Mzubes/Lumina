@@ -66,7 +66,7 @@ const ReportsTable = ({ reports, role, onAction, onExport, emptyMessage = 'No re
               </div>
             )}
           </td>
-          <td>Client #{report.client_id}</td>
+          <td>{report.client_id ? `Client #${report.client_id}` : (report.fund_id ? `Fund #${report.fund_id}` : '—')}</td>
           <td><span className={`status-badge status-${report.status}`}>{STATUS_LABEL[report.status] || report.status}</span></td>
           <td>{report.created_at ? new Date(report.created_at).toLocaleDateString() : '—'}</td>
           <td className="reports-table-actions">

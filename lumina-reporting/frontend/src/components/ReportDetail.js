@@ -29,6 +29,21 @@ const DocumentBlock = ({ component }) => {
       </div>
     );
   }
+  if (component.type === 'people_grid') {
+    return (
+      <div className="document-block">
+        <h3 className="document-block-title">{component.title}</h3>
+        <div className="people-grid-preview">
+          {component.people.map((person, index) => (
+            <div className="people-grid-preview-row" key={index}>
+              <strong>{person.name}</strong>
+              <span>{[person.title, person.detail].filter(Boolean).join(' · ')}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
   return (
     <div className="document-block">
       <h3 className="document-block-title">{component.title}</h3>
@@ -60,6 +75,7 @@ const ReportDetail = () => {
 
   const [report, setReport] = useState(null);
   const [clients, setClients] = useState([]);
+  const [funds, setFunds] = useState([]);
   const [history, setHistory] = useState([]);
   const [content, setContent] = useState(null);
   const [notFound, setNotFound] = useState(false);
@@ -81,6 +97,7 @@ const ReportDetail = () => {
     // list), so skip the call for the client role -- it would just 403.
     if (isDemoMode || role === 'client') return;
     apiFetch('/api/clients').then(setClients).catch(() => {});
+    apiFetch('/api/funds').then(setFunds).catch(() => {});
   }, [role]);
 
   useEffect(() => {
@@ -98,7 +115,12 @@ const ReportDetail = () => {
   }
   if (!report) return <div className="report-detail" />;
 
-  const clientName = clients.find(c => c.id === report.client_id)?.name || `Client #${report.client_id}`;
+  const clientName = report.client_id
+    ? (clients.find(c => c.id === report.client_id)?.name || `Client #${report.client_id}`)
+    : null;
+  const fundName = report.fund_id
+    ? (funds.find(f => f.id === report.fund_id)?.name || `Fund #${report.fund_id}`)
+    : null;
   const availableActions = (ACTIONS_BY_STATUS[report.status] || []).filter(({ roles }) => roles.includes(role));
 
   const handleAction = async (action) => {
@@ -172,7 +194,7 @@ const ReportDetail = () => {
           <section className="panel">
             <div className="panel-header"><h2>Request details</h2></div>
             <dl className="report-detail-fields">
-              <div><dt>Client</dt><dd>{clientName}</dd></div>
+              <div><dt>{clientName ? 'Client' : 'Fund / Strategy'}</dt><dd>{clientName || fundName || '—'}</dd></div>
               <div><dt>Team</dt><dd>{report.team || '—'}</dd></div>
               <div><dt>Compliance required</dt><dd>{report.complianceRequired ? 'Yes' : 'No'}</dd></div>
               <div><dt>Created</dt><dd>{formatDate(report.created_at)}</dd></div>

@@ -33,6 +33,25 @@ def test_export_pdf_for_templated_report(client, auth_headers, sample_client, sa
     assert response.content_type == 'application/pdf'
     assert response.data[:4] == b'%PDF'
 
+def test_export_pdf_survives_non_latin1_text(client, auth_headers, sample_client):
+    # fpdf2's core "Helvetica" font only supports latin-1 -- an em-dash,
+    # curly quotes, or an ellipsis in real document text used to crash the
+    # export outright instead of degrading gracefully.
+    components = [
+        {"id": "c1", "type": "text_block", "title": "Commentary",
+         "data_binding": {"static_text": "Pzena's view — “value” investing … continues."}},
+        {"id": "c2", "type": "data_table", "title": "Series",
+         "data_binding": {"columns": ["Label"], "rows": [["Composite – Gross"]]}},
+    ]
+    template = client.post('/api/templates', headers=auth_headers, json={
+        'name': 'Unicode Template', 'components': components,
+    }).get_json()
+    report = _create_templated_report(client, auth_headers, sample_client, template['id'])
+
+    response = client.get(f"/api/reports/{report['id']}/export?format=pdf", headers=auth_headers)
+    assert response.status_code == 200
+    assert response.data[:4] == b'%PDF'
+
 def test_export_pptx_and_xlsx_for_templated_report(client, auth_headers, sample_client):
     template = _create_template(client, auth_headers)
     report = _create_templated_report(client, auth_headers, sample_client, template['id'])
