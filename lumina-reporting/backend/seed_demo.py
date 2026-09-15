@@ -4,7 +4,7 @@ import json
 from database import db_session
 from models import (
     Client, Contact, Disclosure, FundData, Holding, PerformanceSnapshot,
-    Report, ReportTemplate, User,
+    Report, ReportTemplate, TemplateClientAssignment, User,
 )
 from renderers import RENDERERS
 from report_content import resolve_report_content
@@ -262,7 +262,10 @@ def seed_demo():
             ['Series', '2023', '2024', '2025 YTD', 'Since Inception'],
             CALENDAR_YEAR_RETURNS_ROWS,
         ),
-        {'id': 'commentary', 'type': 'text_block', 'title': 'Portfolio Commentary', 'data_binding': {'static_text': PORTFOLIO_COMMENTARY}},
+        {
+            'id': 'commentary', 'type': 'text_block', 'title': 'Portfolio Commentary', 'review_role': 'compliance',
+            'data_binding': {'static_text': PORTFOLIO_COMMENTARY},
+        },
     ]
 
     template = ReportTemplate(
@@ -283,6 +286,9 @@ def seed_demo():
         created_by=admin.id,
     )
     db_session.add(template)
+    db_session.commit()
+
+    db_session.add(TemplateClientAssignment(template_id=template.id, client_id=client.id))
     db_session.commit()
 
     report = Report(

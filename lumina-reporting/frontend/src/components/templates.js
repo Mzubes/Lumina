@@ -16,6 +16,13 @@ const CHART_TYPES = [
   { value: 'bar_comparison', label: 'Bar comparison (col 2 vs. col 3)' },
 ];
 
+const REVIEW_ROLES = [
+  { value: '', label: 'No review required' },
+  { value: 'compliance', label: 'Compliance' },
+  { value: 'admin', label: 'Admin' },
+  { value: 'editor', label: 'Editor' },
+];
+
 const newComponent = () => ({
   id: `comp-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
   type: 'holdings_table',
@@ -26,34 +33,27 @@ const newComponent = () => ({
   tableRows: [['', '']],
   chartType: 'none',
   people: [{ name: '', title: '', detail: '', photoUrl: '' }],
+  reviewRole: '',
 });
 
 const toApiComponents = (components) => components.map((component) => {
+  const base = { id: component.id, type: component.type, title: component.title, review_role: component.reviewRole || undefined };
   if (component.type === 'text_block') {
-    return { id: component.id, type: component.type, title: component.title, data_binding: { static_text: component.staticText } };
+    return { ...base, data_binding: { static_text: component.staticText } };
   }
   if (component.type === 'performance_summary') {
-    return {
-      id: component.id, type: component.type, title: component.title,
-      data_binding: { dataset: 'performance', filters: { period_types: component.periodTypes } },
-    };
+    return { ...base, data_binding: { dataset: 'performance', filters: { period_types: component.periodTypes } } };
   }
   if (component.type === 'data_table') {
-    return {
-      id: component.id, type: component.type, title: component.title,
-      data_binding: { columns: component.tableColumns, rows: component.tableRows, chart_type: component.chartType || 'none' },
-    };
+    return { ...base, data_binding: { columns: component.tableColumns, rows: component.tableRows, chart_type: component.chartType || 'none' } };
   }
   if (component.type === 'people_grid') {
     return {
-      id: component.id, type: component.type, title: component.title,
+      ...base,
       data_binding: { rows: component.people.map(p => ({ name: p.name, title: p.title, detail: p.detail, photo_url: p.photoUrl || undefined })) },
     };
   }
-  return {
-    id: component.id, type: component.type, title: component.title,
-    data_binding: { dataset: 'holdings', filters: { as_of: 'latest' } },
-  };
+  return { ...base, data_binding: { dataset: 'holdings', filters: { as_of: 'latest' } } };
 });
 
 const fromApiComponents = (apiComponents) => apiComponents.map((component) => ({
@@ -67,11 +67,15 @@ const fromApiComponents = (apiComponents) => apiComponents.map((component) => ({
   chartType: (component.data_binding && component.data_binding.chart_type) || 'none',
   people: ((component.data_binding && component.data_binding.rows) || [{ name: '', title: '', detail: '', photoUrl: '' }])
     .map(p => ({ name: p.name || '', title: p.title || '', detail: p.detail || '', photoUrl: p.photo_url || '' })),
+  reviewRole: component.review_role || '',
 }));
 
 const Templates = () => {
   const [templates, setTemplates] = useState([]);
   const [disclosures, setDisclosures] = useState([]);
+  const [clients, setClients] = useState([]);
+  const [assignedClientIds, setAssignedClientIds] = useState([]);
+  const [flash, setFlash] = useState('');
   const [error, setError] = useState('');
   const [editingId, setEditingId] = useState(null);
   const [name, setName] = useState('');
@@ -94,6 +98,7 @@ const Templates = () => {
     if (isDemoMode) return;
     loadTemplates();
     apiFetch('/api/disclosures').then(setDisclosures).catch(() => {});
+    apiFetch('/api/clients').then(setClients).catch(() => {});
   }, []);
 
   const resetForm = () => {
@@ -108,6 +113,7 @@ const Templates = () => {
     setPrimaryColor('');
     setAccentColor('');
     setLogoUrl('');
+    setAssignedClientIds([]);
   };
 
   const startEdit = (template) => {
@@ -122,6 +128,7 @@ const Templates = () => {
     setPrimaryColor((template.theme_config && template.theme_config.primary_color) || '');
     setAccentColor((template.theme_config && template.theme_config.accent_color) || '');
     setLogoUrl((template.theme_config && template.theme_config.logo_url) || '');
+    apiFetch(`/api/templates/${template.id}/clients`).then(setAssignedClientIds).catch(() => setAssignedClientIds([]));
   };
 
   const updateComponent = (index, patch) => {
@@ -195,6 +202,35 @@ const Templates = () => {
   const toggleDisclosure = (disclosureId) => {
     setSelectedDisclosureIds(current => (current.includes(disclosureId)
       ? current.filter(id => id !== disclosureId) : [...current, disclosureId]));
+  };
+
+  const toggleAssignedClient = (clientId) => {
+    setAssignedClientIds(current => (current.includes(clientId)
+      ? current.filter(id => id !== clientId) : [...current, clientId]));
+  };
+
+  const handleSaveAssignedClients = async () => {
+    setError('');
+    try {
+      await apiFetch(`/api/templates/${editingId}/clients`, {
+        method: 'PUT', body: JSON.stringify({ client_ids: assignedClientIds }),
+      });
+      setFlash('Assigned clients saved.');
+      setTimeout(() => setFlash(''), 4000);
+    } catch (requestError) { setError(requestError.message); }
+  };
+
+  const handleApprove = async () => {
+    if (!window.confirm( // eslint-disable-line no-alert
+      'Approving generates one new draft report for every assigned client, right now. Continue?',
+    )) return;
+    setError('');
+    try {
+      const result = await apiFetch(`/api/templates/${editingId}/approve`, { method: 'POST' });
+      setFlash(`Approved — generated ${result.generated_reports.length} report(s).`);
+      setTimeout(() => setFlash(''), 6000);
+      loadTemplates();
+    } catch (requestError) { setError(requestError.message); }
   };
 
   const handleSubmit = async (event) => {
@@ -296,6 +332,13 @@ const Templates = () => {
                   value={component.title}
                   onChange={e => updateComponent(index, { title: e.target.value })}
                 />
+                <select
+                  className="review-role-select" value={component.reviewRole || ''}
+                  onChange={e => updateComponent(index, { reviewRole: e.target.value })}
+                  title="Requires review from"
+                >
+                  {REVIEW_ROLES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
+                </select>
                 <button type="button" onClick={() => moveComponent(index, -1)} disabled={index === 0}>↑</button>
                 <button type="button" onClick={() => moveComponent(index, 1)} disabled={index === components.length - 1}>↓</button>
                 <button type="button" onClick={() => removeComponent(index)}>Remove</button>
@@ -395,6 +438,41 @@ const Templates = () => {
         </form>
       </section>
 
+      {editingId && (() => {
+        const activeTemplate = templates.find(t => t.id === editingId);
+        return (
+          <section className="panel">
+            <h2>Assigned clients &amp; approval</h2>
+            <p className="field-hint">
+              Approving generates one draft report per assigned client, immediately — each one then moves
+              through the normal Draft → Review → Compliance → Approved → Distributed workflow on its own.
+            </p>
+            <div className="disclosure-picker">
+              {clients.map(clientOption => (
+                <label key={clientOption.id} className="checkbox-label">
+                  <input
+                    type="checkbox"
+                    checked={assignedClientIds.includes(clientOption.id)}
+                    onChange={() => toggleAssignedClient(clientOption.id)}
+                  /> {clientOption.name}
+                </label>
+              ))}
+              {clients.length === 0 && <p className="field-hint">No clients yet — add some on the Clients page.</p>}
+            </div>
+            <div className="form-actions">
+              <button type="button" onClick={handleSaveAssignedClients}>Save assigned clients</button>
+              <button type="button" onClick={handleApprove}>Approve &amp; Generate</button>
+            </div>
+            <p className="field-hint">
+              {activeTemplate && activeTemplate.approved_at
+                ? `Approved ${new Date(activeTemplate.approved_at).toLocaleString()}`
+                : 'Not yet approved.'}
+            </p>
+          </section>
+        );
+      })()}
+
+      {flash && <p className="form-message form-message-success">✓ {flash}</p>}
       {error && <p className="form-message">{error}</p>}
     </div>
   );

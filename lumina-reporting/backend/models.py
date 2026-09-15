@@ -3,7 +3,7 @@ import json
 
 from sqlalchemy import event
 from sqlalchemy.orm import declarative_base
-from sqlalchemy import Column, Date, DateTime, ForeignKey, Integer, Numeric, String, Text
+from sqlalchemy import Column, Date, DateTime, ForeignKey, Integer, Numeric, String, Text, UniqueConstraint
 from werkzeug.security import check_password_hash, generate_password_hash
 
 CONFIG_SECRET_KEYS = {'password', 'auth_token'}
@@ -191,6 +191,8 @@ class ReportTemplate(Base):
     header_config = Column(Text, nullable=True)  # JSON: {title, subtitle} shown on every rendered page
     footer_config = Column(Text, nullable=True)  # JSON: {text} shown on every rendered page, plus page numbers
     theme_config = Column(Text, nullable=True)  # JSON: {primary_color, accent_color, logo_url} -- hex colors; logo_url is https:// or a data: URI
+    approved_at = Column(DateTime, nullable=True)
+    approved_by = Column(Integer, ForeignKey('users.id'), nullable=True)
     created_by = Column(Integer, ForeignKey('users.id'), nullable=False)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
@@ -220,6 +222,8 @@ class ReportTemplate(Base):
             "header_config": self.header_config_dict(),
             "footer_config": self.footer_config_dict(),
             "theme_config": self.theme_config_dict(),
+            "approved_at": self.approved_at.isoformat() if self.approved_at else None,
+            "approved_by": self.approved_by,
             "created_by": self.created_by,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
@@ -325,4 +329,41 @@ class Disclosure(Base):
             "created_by": self.created_by,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }
+
+class ComponentReview(Base):
+    __tablename__ = 'component_reviews'
+    id = Column(Integer, primary_key=True)
+    report_id = Column(Integer, ForeignKey('reports.id'), nullable=False)
+    component_id = Column(String(64), nullable=False)  # matches a component's own id within the report's template
+    reviewed_by = Column(Integer, ForeignKey('users.id'), nullable=True)
+    reviewed_at = Column(DateTime, nullable=True)
+    note = Column(Text, nullable=True)
+
+    def serialize(self):
+        return {
+            "id": self.id,
+            "report_id": self.report_id,
+            "component_id": self.component_id,
+            "reviewed_by": self.reviewed_by,
+            "reviewed_at": self.reviewed_at.isoformat() if self.reviewed_at else None,
+            "note": self.note,
+        }
+
+class TemplateClientAssignment(Base):
+    __tablename__ = 'template_client_assignments'
+    __table_args__ = (
+        UniqueConstraint('template_id', 'client_id', name='uq_template_client_assignment'),
+    )
+    id = Column(Integer, primary_key=True)
+    template_id = Column(Integer, ForeignKey('report_templates.id'), nullable=False)
+    client_id = Column(Integer, ForeignKey('clients.id'), nullable=False)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+    def serialize(self):
+        return {
+            "id": self.id,
+            "template_id": self.template_id,
+            "client_id": self.client_id,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
         }

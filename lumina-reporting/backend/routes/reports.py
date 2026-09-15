@@ -6,7 +6,7 @@ from flask import Blueprint, Response, g, jsonify, request
 
 from database import db_session
 from logs import log_action
-from models import Client, Contact, DistributionLink, FundData, Report, ReportTemplate, ReportTransition, User
+from models import Client, ComponentReview, Contact, DistributionLink, FundData, Report, ReportTemplate, ReportTransition, User
 from renderers import CONTENT_TYPES, RENDERERS
 from report_content import resolve_report_content
 from report_generator import generate_pdf
@@ -298,3 +298,84 @@ def revoke_distribution_link(report_id, link_id):
         link.revoked_at = datetime.datetime.utcnow()
         db_session.commit()
     return jsonify(link.serialize())
+
+def _reviewable_components(report):
+    """The report's own template components that carry a review_role -- []
+    for legacy (template-less) reports, which have nothing to review."""
+    if not report.template_id:
+        return []
+    template = db_session.query(ReportTemplate).filter_by(id=report.template_id).first()
+    if not template:
+        return []
+    return [c for c in template.components_list() if c.get('review_role')]
+
+@reports_blueprint.get('/api/reports/<int:report_id>/review-checklist')
+@require_auth(roles=['admin', 'editor', 'viewer', 'compliance'])
+def get_review_checklist(report_id):
+    report = _get_scoped_report(report_id)
+    if not report:
+        return jsonify({'message': 'Report not found'}), 404
+    components = _reviewable_components(report)
+    reviews_by_component = {
+        review.component_id: review for review in
+        db_session.query(ComponentReview).filter_by(report_id=report.id).all()
+    }
+    checklist = []
+    for component in components:
+        review = reviews_by_component.get(component['id'])
+        checklist.append({
+            'component_id': component['id'],
+            'title': component.get('title'),
+            'review_role': component['review_role'],
+            'reviewed': review is not None,
+            'reviewed_by': review.reviewed_by if review else None,
+            'reviewed_at': review.reviewed_at.isoformat() if review and review.reviewed_at else None,
+            'note': review.note if review else None,
+        })
+    return jsonify(checklist)
+
+@reports_blueprint.post('/api/reports/<int:report_id>/components/<component_id>/review')
+@require_auth(roles=['admin', 'editor', 'compliance'])
+def mark_component_reviewed(report_id, component_id):
+    report = _get_scoped_report(report_id)
+    if not report:
+        return jsonify({'message': 'Report not found'}), 404
+    component = next((c for c in _reviewable_components(report) if c['id'] == component_id), None)
+    if not component:
+        return jsonify({'message': 'Unknown or non-reviewable component_id'}), 404
+
+    user_role = g.current_user.get('role')
+    if user_role != 'admin' and user_role != component['review_role']:
+        return jsonify({'message': f"Only {component['review_role']} or admin can review this component"}), 403
+
+    data = request.get_json(silent=True) or {}
+    review = db_session.query(ComponentReview).filter_by(report_id=report.id, component_id=component_id).first()
+    if not review:
+        review = ComponentReview(report_id=report.id, component_id=component_id)
+        db_session.add(review)
+    review.reviewed_by = g.current_user['user_id']
+    review.reviewed_at = datetime.datetime.utcnow()
+    review.note = data.get('note') or None
+    db_session.commit()
+    return jsonify(review.serialize())
+
+@reports_blueprint.delete('/api/reports/<int:report_id>/components/<component_id>/review')
+@require_auth(roles=['admin', 'editor', 'compliance'])
+def clear_component_review(report_id, component_id):
+    report = _get_scoped_report(report_id)
+    if not report:
+        return jsonify({'message': 'Report not found'}), 404
+    component = next((c for c in _reviewable_components(report) if c['id'] == component_id), None)
+    if not component:
+        return jsonify({'message': 'Unknown or non-reviewable component_id'}), 404
+
+    user_role = g.current_user.get('role')
+    if user_role != 'admin' and user_role != component['review_role']:
+        return jsonify({'message': f"Only {component['review_role']} or admin can review this component"}), 403
+
+    review = db_session.query(ComponentReview).filter_by(report_id=report.id, component_id=component_id).first()
+    if not review:
+        return jsonify({'message': 'Not yet reviewed'}), 404
+    db_session.delete(review)
+    db_session.commit()
+    return '', 204

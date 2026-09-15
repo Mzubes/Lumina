@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { apiDownload, apiFetch, apiFetchBlobUrl, isDemoMode } from '../api';
 import DistributionPanel from './DistributionPanel';
+import ReviewChecklistPanel from './ReviewChecklistPanel';
 import { ACTIONS_BY_STATUS, EXPORT_FORMATS, STATUS_LABEL } from './ReportsTable';
 import WorkflowStepper from './charts/WorkflowStepper';
 
@@ -180,6 +181,10 @@ const ReportDetail = () => {
               ))}
             </select>
           </section>
+
+          {role !== 'client' && report.template_id && (
+            <ReviewChecklistPanel reportId={report.id} role={role} />
+          )}
 
           {role !== 'client' && report.status === 'distributed' && (
             <DistributionPanel reportId={report.id} clientId={report.client_id} role={role} />
