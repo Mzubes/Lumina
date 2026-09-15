@@ -18,12 +18,11 @@ import models  # noqa: F401 -- import all models so they register on Base.metada
 # access to the values within the .ini file in use.
 config = context.config
 
-database_url = os.environ.get('DATABASE_URL')
-if database_url:
-    database_url = database_url.replace('postgres://', 'postgresql+psycopg://', 1)
-else:
-    database_url = Config.SQLALCHEMY_DATABASE_URI
-config.set_main_option('sqlalchemy.url', database_url)
+# Config.SQLALCHEMY_DATABASE_URI already reads DATABASE_URL and normalizes
+# its driver prefix (see config.py) -- reuse it rather than re-deriving the
+# same thing here, which previously had its own copy of that logic that
+# only handled Render's 'postgres://' prefix and not Neon's 'postgresql://'.
+config.set_main_option('sqlalchemy.url', Config.SQLALCHEMY_DATABASE_URI)
 
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.
