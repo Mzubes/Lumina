@@ -33,6 +33,12 @@ services:
       # Fill in once lumina-api has a URL (see README "Deploy to Render").
       - key: REACT_APP_API_BASE_URL
         sync: false
+      # package.json's "homepage" points at the separate GitHub Pages deploy
+      # (served under /Lumina/), which makes CRA emit asset paths like
+      # /Lumina/static/... -- wrong for Render, which serves this site at
+      # its own domain root. This overrides it for Render builds only.
+      - key: PUBLIC_URL
+        value: /
     routes:
       - type: rewrite
         source: /*
