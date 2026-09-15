@@ -726,6 +726,18 @@ select { appearance: none; background-image: linear-gradient(45deg, transparent 
 .review-checklist-role { font-size: 11.5px; color: var(--ink-muted); text-transform: uppercase; letter-spacing: 0.03em; }
 .review-checklist-status { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 
+/* ---------- workflow groups admin ---------- */
+.workflow-group-swatch {
+  display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin: 0 7px; vertical-align: middle; flex-shrink: 0;
+}
+.workflow-group-swatch.swatch-cat-1 { background: var(--cat-1); }
+.workflow-group-swatch.swatch-cat-2 { background: var(--cat-2); }
+.workflow-group-swatch.swatch-cat-3 { background: var(--cat-3); }
+.workflow-group-swatch.swatch-cat-4 { background: var(--cat-4); }
+.workflow-group-swatch.swatch-cat-5 { background: var(--cat-5); }
+.workflow-group-swatch.swatch-cat-6 { background: var(--cat-6); }
+.workflow-group-swatch.swatch-cat-other { background: var(--cat-other); }
+
 /* ---------- public report page ---------- */
 .public-report { max-width: 860px; margin: 0 auto; padding: 32px 24px 60px; }
 .public-report-brand { display: flex; align-items: center; gap: 10px; margin-bottom: 28px; }

@@ -65,6 +65,10 @@ export const IconSearch = () => (
   <svg {...base}><circle cx="11" cy="11" r="7" /><path d="m20.5 20.5-4.3-4.3" /></svg>
 );
 
+export const IconWorkflow = () => (
+  <svg {...base}><circle cx="5" cy="6" r="2.5" /><circle cx="5" cy="18" r="2.5" /><circle cx="18" cy="12" r="2.5" /><path d="M7.2 7.2 15.8 11M7.2 16.8 15.8 13" /></svg>
+);
+
 export const IconUserGear = () => (
   <svg {...base}><circle cx="9" cy="8" r="3.5" /><path d="M2.5 20.5c0-3.6 2.9-6.5 6.5-6.5" /><circle cx="18" cy="17" r="3.2" /><path d="M18 12.3v1.4M18 20.3v1.4M13.3 17h1.4M21.3 17h1.4M14.9 13.9l1 1M20.1 18.1l1 1M14.9 20.1l1-1M20.1 15.9l1-1" /></svg>
 );

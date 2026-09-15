@@ -17,6 +17,7 @@ from routes.public import public_blueprint
 from routes.reports import reports_blueprint
 from routes.templates import templates_blueprint
 from routes.users import users_blueprint
+from routes.workflow_groups import workflow_groups_blueprint
 
 def create_app(test_config=None):
     app = Flask(__name__)
@@ -44,6 +45,7 @@ def create_app(test_config=None):
     app.register_blueprint(disclosures_blueprint)
     app.register_blueprint(public_blueprint)
     app.register_blueprint(users_blueprint)
+    app.register_blueprint(workflow_groups_blueprint)
 
     @app.get('/api/health')
     def health():

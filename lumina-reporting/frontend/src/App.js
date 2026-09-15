@@ -14,12 +14,14 @@ import Reports from './components/reports';
 import ReportDetail from './components/ReportDetail';
 import Templates from './components/templates';
 import Users from './components/users';
+import WorkflowGroups from './components/workflowGroups';
 import Login from './pages/Login';
 import ClientPortal from './pages/ClientPortal';
 import PublicReport from './pages/PublicReport';
 import {
   IconBadge, IconBriefcase, IconCheckCircle, IconClipboard, IconDashboard, IconDatabase, IconDocument,
   IconLayout, IconLogIn, IconLogOut, IconPlug, IconPresentation, IconSearch, IconShield, IconUserGear, IconUsers,
+  IconWorkflow,
 } from './icons';
 
 // Staff roles -- every non-client role. `client` gets its own separate,
@@ -51,6 +53,7 @@ const navSections = [
     ['/disclosures', 'Disclosures', IconClipboard, STAFF_ROLES],
     ['/activity', 'Activity Log', IconShield, STAFF_ROLES],
     ['/users', 'Users & Roles', IconUserGear, ['admin']],
+    ['/workflow-groups', 'Workflow Groups', IconWorkflow, ['admin']],
   ] },
   // Staff preview of the client-facing portal -- admin only, not a working
   // task for editor/viewer/compliance.
@@ -174,6 +177,7 @@ function AuthenticatedShell() {
           <Route path="/disclosures" element={<RequireAuth><Disclosures /></RequireAuth>} />
           <Route path="/activity" element={<RequireAuth><ActivityLog /></RequireAuth>} />
           <Route path="/users" element={<RequireAuth><Users /></RequireAuth>} />
+          <Route path="/workflow-groups" element={<RequireAuth><WorkflowGroups /></RequireAuth>} />
           <Route path="/client-portal" element={<RequireAuth><ClientPortal /></RequireAuth>} />
           <Route path="/login" element={<Login />} />
           <Route path="*" element={<Navigate to="/" replace />} />
