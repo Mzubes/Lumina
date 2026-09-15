@@ -12,7 +12,7 @@ import json
 
 from app import create_app
 from database import db_session
-from models import Client, Holding, PerformanceSnapshot, ReportTemplate, User
+from models import Client, FundData, Holding, PerformanceSnapshot, ReportTemplate, User
 
 @pytest.fixture()
 def app(tmp_path):
@@ -97,6 +97,14 @@ def other_client_portal_headers(app, client):
         db_session.add(user)
         db_session.commit()
     return _login_headers(client, 'other-client-user@example.com', 'other-client-password')
+
+@pytest.fixture()
+def sample_fund(app):
+    with app.app_context():
+        fund = FundData(name='Global Small Cap Focused Value', asset_class='Equity', ticker='PZFVX')
+        db_session.add(fund)
+        db_session.commit()
+        return fund.id
 
 @pytest.fixture()
 def sample_holding(app, sample_client):

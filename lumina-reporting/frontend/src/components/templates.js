@@ -5,6 +5,8 @@ const COMPONENT_TYPES = [
   { value: 'holdings_table', label: 'Holdings Table' },
   { value: 'performance_summary', label: 'Performance Summary' },
   { value: 'text_block', label: 'Commentary Text' },
+  { value: 'data_table', label: 'Data Table (custom)' },
+  { value: 'people_grid', label: 'People / Bios' },
 ];
 
 const PERIOD_TYPES = ['MTD', 'QTD', 'YTD', '1Y', 'ITD'];
@@ -15,6 +17,9 @@ const newComponent = () => ({
   title: '',
   periodTypes: ['QTD', 'YTD'],
   staticText: '',
+  tableColumns: ['Metric', 'Value'],
+  tableRows: [['', '']],
+  people: [{ name: '', title: '', detail: '' }],
 });
 
 const toApiComponents = (components) => components.map((component) => {
@@ -26,6 +31,12 @@ const toApiComponents = (components) => components.map((component) => {
       id: component.id, type: component.type, title: component.title,
       data_binding: { dataset: 'performance', filters: { period_types: component.periodTypes } },
     };
+  }
+  if (component.type === 'data_table') {
+    return { id: component.id, type: component.type, title: component.title, data_binding: { columns: component.tableColumns, rows: component.tableRows } };
+  }
+  if (component.type === 'people_grid') {
+    return { id: component.id, type: component.type, title: component.title, data_binding: { rows: component.people } };
   }
   return {
     id: component.id, type: component.type, title: component.title,
@@ -39,28 +50,44 @@ const fromApiComponents = (apiComponents) => apiComponents.map((component) => ({
   title: component.title,
   periodTypes: (component.data_binding && component.data_binding.filters && component.data_binding.filters.period_types) || ['QTD', 'YTD'],
   staticText: (component.data_binding && component.data_binding.static_text) || '',
+  tableColumns: (component.data_binding && component.data_binding.columns) || ['Metric', 'Value'],
+  tableRows: (component.data_binding && component.data_binding.rows) || [['', '']],
+  people: (component.data_binding && component.data_binding.rows) || [{ name: '', title: '', detail: '' }],
 }));
 
 const Templates = () => {
   const [templates, setTemplates] = useState([]);
+  const [disclosures, setDisclosures] = useState([]);
   const [error, setError] = useState('');
   const [editingId, setEditingId] = useState(null);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [components, setComponents] = useState([newComponent()]);
+  const [selectedDisclosureIds, setSelectedDisclosureIds] = useState([]);
+  const [headerTitle, setHeaderTitle] = useState('');
+  const [headerSubtitle, setHeaderSubtitle] = useState('');
+  const [footerText, setFooterText] = useState('');
 
   const loadTemplates = () => {
     if (isDemoMode) return;
     apiFetch('/api/templates').then(setTemplates).catch(requestError => setError(requestError.message));
   };
 
-  useEffect(() => { if (!isDemoMode) loadTemplates(); }, []);
+  useEffect(() => {
+    if (isDemoMode) return;
+    loadTemplates();
+    apiFetch('/api/disclosures').then(setDisclosures).catch(() => {});
+  }, []);
 
   const resetForm = () => {
     setEditingId(null);
     setName('');
     setDescription('');
     setComponents([newComponent()]);
+    setSelectedDisclosureIds([]);
+    setHeaderTitle('');
+    setHeaderSubtitle('');
+    setFooterText('');
   };
 
   const startEdit = (template) => {
@@ -68,6 +95,10 @@ const Templates = () => {
     setName(template.name);
     setDescription(template.description || '');
     setComponents(fromApiComponents(template.components));
+    setSelectedDisclosureIds(template.disclosure_ids || []);
+    setHeaderTitle((template.header_config && template.header_config.title) || '');
+    setHeaderSubtitle((template.header_config && template.header_config.subtitle) || '');
+    setFooterText((template.footer_config && template.footer_config.text) || '');
   };
 
   const updateComponent = (index, patch) => {
@@ -92,10 +123,66 @@ const Templates = () => {
     }));
   };
 
+  const updateTableColumn = (index, colIndex, value) => {
+    setComponents(rows => rows.map((row, i) => (i === index
+      ? { ...row, tableColumns: row.tableColumns.map((c, ci) => (ci === colIndex ? value : c)) } : row)));
+  };
+  const addTableColumn = (index) => {
+    setComponents(rows => rows.map((row, i) => (i === index ? {
+      ...row,
+      tableColumns: [...row.tableColumns, `Column ${row.tableColumns.length + 1}`],
+      tableRows: row.tableRows.map(r => [...r, '']),
+    } : row)));
+  };
+  const removeTableColumn = (index) => {
+    setComponents(rows => rows.map((row, i) => (i === index && row.tableColumns.length > 1 ? {
+      ...row,
+      tableColumns: row.tableColumns.slice(0, -1),
+      tableRows: row.tableRows.map(r => r.slice(0, -1)),
+    } : row)));
+  };
+  const updateTableCell = (index, rowIndex, cellIndex, value) => {
+    setComponents(rows => rows.map((row, i) => (i === index ? {
+      ...row,
+      tableRows: row.tableRows.map((r, ri) => (ri === rowIndex ? r.map((c, ci) => (ci === cellIndex ? value : c)) : r)),
+    } : row)));
+  };
+  const addTableRow = (index) => {
+    setComponents(rows => rows.map((row, i) => (i === index
+      ? { ...row, tableRows: [...row.tableRows, row.tableColumns.map(() => '')] } : row)));
+  };
+  const removeTableRow = (index, rowIndex) => {
+    setComponents(rows => rows.map((row, i) => (i === index
+      ? { ...row, tableRows: row.tableRows.filter((_, ri) => ri !== rowIndex) } : row)));
+  };
+
+  const updatePerson = (index, personIndex, field, value) => {
+    setComponents(rows => rows.map((row, i) => (i === index
+      ? { ...row, people: row.people.map((p, pi) => (pi === personIndex ? { ...p, [field]: value } : p)) } : row)));
+  };
+  const addPerson = (index) => {
+    setComponents(rows => rows.map((row, i) => (i === index
+      ? { ...row, people: [...row.people, { name: '', title: '', detail: '' }] } : row)));
+  };
+  const removePerson = (index, personIndex) => {
+    setComponents(rows => rows.map((row, i) => (i === index
+      ? { ...row, people: row.people.filter((_, pi) => pi !== personIndex) } : row)));
+  };
+
+  const toggleDisclosure = (disclosureId) => {
+    setSelectedDisclosureIds(current => (current.includes(disclosureId)
+      ? current.filter(id => id !== disclosureId) : [...current, disclosureId]));
+  };
+
   const handleSubmit = async (event) => {
     event.preventDefault();
     setError('');
-    const payload = { name, description, components: toApiComponents(components) };
+    const payload = {
+      name, description, components: toApiComponents(components),
+      disclosure_ids: selectedDisclosureIds,
+      header_config: (headerTitle || headerSubtitle) ? { title: headerTitle, subtitle: headerSubtitle } : null,
+      footer_config: footerText ? { text: footerText } : null,
+    };
     try {
       if (editingId) {
         await apiFetch(`/api/templates/${editingId}`, { method: 'PUT', body: JSON.stringify(payload) });
@@ -146,6 +233,18 @@ const Templates = () => {
             <input value={description} onChange={e => setDescription(e.target.value)} />
           </label>
 
+          <h3>Header &amp; footer</h3>
+          <p className="field-hint">Shown at the top and bottom of every page when exported to PDF. Leave blank for no repeating banner.</p>
+          <label>Header title
+            <input placeholder="e.g. ACME GLOBAL EQUITY STRATEGY" value={headerTitle} onChange={e => setHeaderTitle(e.target.value)} />
+          </label>
+          <label>Header subtitle
+            <input placeholder="e.g. As of June 30, 2026 | For Professional Investors Only" value={headerSubtitle} onChange={e => setHeaderSubtitle(e.target.value)} />
+          </label>
+          <label>Footer text
+            <input placeholder="e.g. Acme Asset Management | (800) 555-0100 | acme.com" value={footerText} onChange={e => setFooterText(e.target.value)} />
+          </label>
+
           <h3>Sections</h3>
           {components.map((component, index) => (
             <div className="component-row" key={component.id}>
@@ -184,9 +283,65 @@ const Templates = () => {
                   onChange={e => updateComponent(index, { staticText: e.target.value })}
                 />
               )}
+
+              {component.type === 'data_table' && (
+                <div className="data-table-editor">
+                  <div className="data-table-editor-row data-table-editor-columns">
+                    {component.tableColumns.map((col, colIndex) => (
+                      <input
+                        key={colIndex} placeholder={`Column ${colIndex + 1}`} value={col}
+                        onChange={e => updateTableColumn(index, colIndex, e.target.value)}
+                      />
+                    ))}
+                    <button type="button" onClick={() => addTableColumn(index)}>+ Column</button>
+                    <button type="button" onClick={() => removeTableColumn(index)} disabled={component.tableColumns.length <= 1}>− Column</button>
+                  </div>
+                  {component.tableRows.map((row, rowIndex) => (
+                    <div className="data-table-editor-row" key={rowIndex}>
+                      {row.map((cell, cellIndex) => (
+                        <input
+                          key={cellIndex} value={cell}
+                          onChange={e => updateTableCell(index, rowIndex, cellIndex, e.target.value)}
+                        />
+                      ))}
+                      <button type="button" onClick={() => removeTableRow(index, rowIndex)} disabled={component.tableRows.length <= 1}>Remove row</button>
+                    </div>
+                  ))}
+                  <button type="button" onClick={() => addTableRow(index)}>+ Row</button>
+                </div>
+              )}
+
+              {component.type === 'people_grid' && (
+                <div className="people-grid-editor">
+                  {component.people.map((person, personIndex) => (
+                    <div className="people-grid-editor-row" key={personIndex}>
+                      <input placeholder="Name" value={person.name} onChange={e => updatePerson(index, personIndex, 'name', e.target.value)} />
+                      <input placeholder="Title" value={person.title} onChange={e => updatePerson(index, personIndex, 'title', e.target.value)} />
+                      <input placeholder="Detail" value={person.detail} onChange={e => updatePerson(index, personIndex, 'detail', e.target.value)} />
+                      <button type="button" onClick={() => removePerson(index, personIndex)} disabled={component.people.length <= 1}>Remove</button>
+                    </div>
+                  ))}
+                  <button type="button" onClick={() => addPerson(index)}>+ Person</button>
+                </div>
+              )}
             </div>
           ))}
           <button type="button" onClick={addComponent}>Add a section</button>
+
+          <h3>Disclosures</h3>
+          <p className="field-hint">Selected disclosures are appended to the end of the document, in this order.</p>
+          <div className="disclosure-picker">
+            {disclosures.map(disclosure => (
+              <label key={disclosure.id} className="checkbox-label">
+                <input
+                  type="checkbox"
+                  checked={selectedDisclosureIds.includes(disclosure.id)}
+                  onChange={() => toggleDisclosure(disclosure.id)}
+                /> {disclosure.title}
+              </label>
+            ))}
+            {disclosures.length === 0 && <p className="field-hint">No disclosures in the library yet — add some on the Disclosures page.</p>}
+          </div>
 
           <div className="form-actions">
             <button type="submit">{editingId ? 'Save changes' : 'Create template'}</button>

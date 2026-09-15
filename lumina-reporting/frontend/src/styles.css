@@ -247,6 +247,19 @@ select { appearance: none; background-image: linear-gradient(45deg, transparent 
 .report-list li:last-child { border-bottom: 0; padding-bottom: 2px; }
 .report-list li:first-child { padding-top: 2px; }
 .report-list li > span:first-child { flex: 1; color: var(--ink-primary); }
+
+.client-list-item { flex-direction: column; align-items: stretch; gap: 0; }
+.client-list-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.client-expand {
+  flex: 1; text-align: left; background: transparent; border: 0; color: var(--ink-primary);
+  font-size: 14px; font-weight: 500; padding: 0; cursor: pointer;
+}
+.client-expand:hover { color: var(--brand); }
+.client-contacts { padding: 12px 0 14px 20px; border-top: 1px solid var(--panel-border); margin-top: 12px; }
+.client-contacts .report-list li { font-size: 13px; padding: 10px 2px; }
+.contact-form { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+.contact-form input { flex: 1 1 140px; margin: 0; }
+.contact-form button { flex-shrink: 0; }
 .muted { color: var(--ink-secondary); font-style: normal; font-size: 12px; }
 
 .login { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 70vh; text-align: center; }
@@ -317,6 +330,15 @@ select { appearance: none; background-image: linear-gradient(45deg, transparent 
 .checkbox-label { display: flex; align-items: center; gap: 6px; color: var(--ink-secondary); font-size: 13px; margin: 0; }
 .checkbox-label input { width: auto; margin: 0; accent-color: var(--brand); }
 .component-row textarea { margin-top: 10px; }
+
+.data-table-editor, .people-grid-editor { margin-top: 12px; display: flex; flex-direction: column; gap: 6px; }
+.data-table-editor-row, .people-grid-editor-row { display: flex; gap: 6px; align-items: center; }
+.data-table-editor-row input, .people-grid-editor-row input { margin: 0; flex: 1; min-width: 0; }
+.data-table-editor-columns input { font-weight: 700; }
+.data-table-editor-row button, .people-grid-editor-row button { flex-shrink: 0; padding: 8px 10px; font-size: 12px; white-space: nowrap; }
+.data-table-editor > button, .people-grid-editor > button { align-self: flex-start; margin-top: 4px; }
+
+.disclosure-picker { display: flex; flex-direction: column; gap: 8px; margin-bottom: 4px; }
 
 /* ---------- bar chart ---------- */
 

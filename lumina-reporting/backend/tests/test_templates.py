@@ -67,6 +67,54 @@ def test_delete_template_not_in_use(client, editor_headers):
     assert response.status_code == 204
     assert client.get(f"/api/templates/{created['id']}", headers=editor_headers).status_code == 404
 
+def test_create_template_with_data_table_and_people_grid(client, editor_headers):
+    components = [
+        {"id": "c1", "type": "data_table", "title": "Strategy Facts",
+         "data_binding": {"columns": ["Metric", "Value"], "rows": [["Inception", "April 2021"], ["AUM", "$0.5B"]]}},
+        {"id": "c2", "type": "people_grid", "title": "Portfolio Managers",
+         "data_binding": {"rows": [{"name": "Evan Fox, CFA", "title": "PM", "detail": "With firm since 2007"}]}},
+    ]
+    response = client.post('/api/templates', headers=editor_headers, json={'name': 'Factsheet', 'components': components})
+    assert response.status_code == 201
+    body = response.get_json()
+    assert body['components'][0]['type'] == 'data_table'
+    assert body['components'][1]['type'] == 'people_grid'
+
+def test_data_table_rejects_mismatched_row_length(client, editor_headers):
+    components = [{"id": "c1", "type": "data_table", "title": "Bad Table",
+                   "data_binding": {"columns": ["A", "B"], "rows": [["only one"]]}}]
+    response = client.post('/api/templates', headers=editor_headers, json={'name': 'Bad', 'components': components})
+    assert response.status_code == 400
+
+def test_people_grid_rejects_person_without_name(client, editor_headers):
+    components = [{"id": "c1", "type": "people_grid", "title": "Team",
+                   "data_binding": {"rows": [{"title": "PM"}]}}]
+    response = client.post('/api/templates', headers=editor_headers, json={'name': 'Bad', 'components': components})
+    assert response.status_code == 400
+
+def test_create_template_with_header_footer_and_disclosures(client, editor_headers):
+    disclosure = client.post('/api/disclosures', headers=editor_headers, json={
+        'title': 'General Risk', 'body': 'All investments involve risk.',
+    }).get_json()
+
+    response = client.post('/api/templates', headers=editor_headers, json={
+        'name': 'Factsheet', 'components': VALID_COMPONENTS,
+        'disclosure_ids': [disclosure['id']],
+        'header_config': {'title': 'ACME STRATEGY', 'subtitle': 'As of June 30, 2026'},
+        'footer_config': {'text': 'Acme Asset Management'},
+    })
+    assert response.status_code == 201
+    body = response.get_json()
+    assert body['disclosure_ids'] == [disclosure['id']]
+    assert body['header_config']['title'] == 'ACME STRATEGY'
+    assert body['footer_config']['text'] == 'Acme Asset Management'
+
+def test_create_template_rejects_unknown_disclosure_id(client, editor_headers):
+    response = client.post('/api/templates', headers=editor_headers, json={
+        'name': 'Factsheet', 'components': VALID_COMPONENTS, 'disclosure_ids': [999999],
+    })
+    assert response.status_code == 400
+
 def test_delete_template_in_use_is_blocked(app, client, editor_headers, sample_client):
     created = client.post('/api/templates', headers=editor_headers, json={
         'name': 'In Use Template', 'components': VALID_COMPONENTS,

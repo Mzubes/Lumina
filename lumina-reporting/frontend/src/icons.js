@@ -52,3 +52,11 @@ export const IconPresentation = () => (
 export const IconShield = () => (
   <svg {...base}><path d="M12 2.5 4.5 5.5v6c0 5 3.2 8.4 7.5 10 4.3-1.6 7.5-5 7.5-10v-6Z" /><path d="m8.5 12 2.4 2.4L16 9" /></svg>
 );
+
+export const IconBriefcase = () => (
+  <svg {...base}><rect x="2.5" y="7" width="19" height="13" rx="2" /><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /><path d="M2.5 13h19" /></svg>
+);
+
+export const IconClipboard = () => (
+  <svg {...base}><rect x="5" y="4" width="14" height="17" rx="2" /><rect x="9" y="2.5" width="6" height="3" rx="1" /><path d="M8.5 11h7M8.5 15h7" /></svg>
+);

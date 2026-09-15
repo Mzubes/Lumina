@@ -2,9 +2,11 @@ import React from 'react';
 import { HashRouter, NavLink, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import Dashboard from './components/Dashboard';
 import Approvals from './components/approvals';
+import Clients from './components/clients';
 import Compliance from './components/compliance';
 import DataHub from './components/datahub';
 import DataSources from './components/datasources';
+import Disclosures from './components/disclosures';
 import Marketing from './components/marketing';
 import Pitchbooks from './components/pitchbooks';
 import Reports from './components/reports';
@@ -13,7 +15,7 @@ import Templates from './components/templates';
 import Login from './pages/Login';
 import ClientPortal from './pages/ClientPortal';
 import {
-  IconBadge, IconCheckCircle, IconDashboard, IconDatabase, IconDocument,
+  IconBadge, IconBriefcase, IconCheckCircle, IconClipboard, IconDashboard, IconDatabase, IconDocument,
   IconLayout, IconLogIn, IconLogOut, IconPlug, IconPresentation, IconShield, IconUsers,
 } from './icons';
 
@@ -32,6 +34,10 @@ const navSections = [
   { label: 'Marketing', items: [
     ['/marketing', 'Fact Sheets & Marketing', IconBadge],
     ['/pitch-books', 'Pitch Books & Meeting Packs', IconPresentation],
+  ] },
+  { label: 'Admin', items: [
+    ['/clients', 'Clients & Contacts', IconBriefcase],
+    ['/disclosures', 'Disclosures', IconClipboard],
   ] },
   { label: 'Client', items: [['/client-portal', 'Client Portal', IconUsers]] },
 ];
@@ -106,6 +112,8 @@ function App() {
             <Route path="/compliance" element={<Compliance />} />
             <Route path="/marketing" element={<Marketing />} />
             <Route path="/pitch-books" element={<Pitchbooks />} />
+            <Route path="/clients" element={<Clients />} />
+            <Route path="/disclosures" element={<Disclosures />} />
             <Route path="/distribution" element={<Navigate to="/reports" replace />} />
             <Route path="/client-portal" element={<ClientPortal />} />
             <Route path="/login" element={<Login />} />
