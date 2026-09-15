@@ -96,25 +96,35 @@ function Sidebar() {
   );
 }
 
+// Every route below requires a login -- without this, an unauthenticated
+// visitor lands directly on a page that quietly renders empty (each
+// component's own apiFetch calls fail and get caught into an empty
+// fallback state) instead of ever being asked to sign in.
+function RequireAuth({ children }) {
+  const token = window.localStorage.getItem('lumina_token');
+  if (!token) return <Navigate to="/login" replace />;
+  return children;
+}
+
 function AuthenticatedShell() {
   return (
     <div className="app-shell">
       <Sidebar />
       <main className="main-content">
         <Routes>
-          <Route path="/" element={<Dashboard />} />
-          <Route path="/data-hub" element={<DataHub />} />
-          <Route path="/data-sources" element={<DataSources />} />
-          <Route path="/templates" element={<Templates />} />
-          <Route path="/reports" element={<Reports />} />
-          <Route path="/reports/:id" element={<ReportDetail />} />
-          <Route path="/approvals" element={<Approvals />} />
-          <Route path="/compliance" element={<Compliance />} />
-          <Route path="/marketing" element={<Marketing />} />
-          <Route path="/pitch-books" element={<Pitchbooks />} />
-          <Route path="/clients" element={<Clients />} />
-          <Route path="/disclosures" element={<Disclosures />} />
-          <Route path="/client-portal" element={<ClientPortal />} />
+          <Route path="/" element={<RequireAuth><Dashboard /></RequireAuth>} />
+          <Route path="/data-hub" element={<RequireAuth><DataHub /></RequireAuth>} />
+          <Route path="/data-sources" element={<RequireAuth><DataSources /></RequireAuth>} />
+          <Route path="/templates" element={<RequireAuth><Templates /></RequireAuth>} />
+          <Route path="/reports" element={<RequireAuth><Reports /></RequireAuth>} />
+          <Route path="/reports/:id" element={<RequireAuth><ReportDetail /></RequireAuth>} />
+          <Route path="/approvals" element={<RequireAuth><Approvals /></RequireAuth>} />
+          <Route path="/compliance" element={<RequireAuth><Compliance /></RequireAuth>} />
+          <Route path="/marketing" element={<RequireAuth><Marketing /></RequireAuth>} />
+          <Route path="/pitch-books" element={<RequireAuth><Pitchbooks /></RequireAuth>} />
+          <Route path="/clients" element={<RequireAuth><Clients /></RequireAuth>} />
+          <Route path="/disclosures" element={<RequireAuth><Disclosures /></RequireAuth>} />
+          <Route path="/client-portal" element={<RequireAuth><ClientPortal /></RequireAuth>} />
           <Route path="/login" element={<Login />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
