@@ -9,7 +9,7 @@ from models import (
 from renderers import RENDERERS
 from report_content import resolve_report_content
 from routes.reports import _save_pdf_bytes
-from workflow import apply_transition
+from workflow_legacy import apply_transition
 
 AS_OF = datetime.date(2026, 7, 31)
 

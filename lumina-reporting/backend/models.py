@@ -3,7 +3,7 @@ import json
 
 from sqlalchemy import event
 from sqlalchemy.orm import declarative_base
-from sqlalchemy import Column, Date, DateTime, ForeignKey, Integer, Numeric, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, Column, Date, DateTime, ForeignKey, Index, Integer, Numeric, String, Text, UniqueConstraint
 from werkzeug.security import check_password_hash, generate_password_hash
 
 CONFIG_SECRET_KEYS = {'password', 'auth_token'}
@@ -108,8 +108,16 @@ class Report(Base):
     template_id = Column(Integer, ForeignKey('report_templates.id'), nullable=True)
     team = Column(String(60), nullable=True)
     report_type = Column(String(30), nullable=True)
-    status = Column(String(20), nullable=False, default='draft')
+    # Widened from 20: the legacy engine's status vocabulary was five fixed
+    # words, but a firm-configured workflow step can be named anything
+    # ("Portfolio Manager Sign-off"). Once workflow_diagram_id is set, this
+    # column is a denormalized display label recomputed by workflow_engine
+    # after every transition -- report_step_instances is the source of truth
+    # for where a report actually is (it supports multiple simultaneously
+    # active nodes for parallel branches; a single string can't).
+    status = Column(String(60), nullable=False, default='draft')
     file_path = Column(String(255))
+    workflow_diagram_id = Column(Integer, ForeignKey('workflow_diagrams.id'), nullable=True)
     created_by = Column(Integer, ForeignKey('users.id'), nullable=False)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
@@ -125,6 +133,7 @@ class Report(Base):
             "report_type": self.report_type,
             "status": self.status,
             "file_path": self.file_path,
+            "workflow_diagram_id": self.workflow_diagram_id,
             "created_by": self.created_by,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
@@ -137,8 +146,8 @@ class ReportTransition(Base):
     __tablename__ = 'report_transitions'
     id = Column(Integer, primary_key=True)
     report_id = Column(Integer, ForeignKey('reports.id'), nullable=False)
-    from_status = Column(String(20))
-    to_status = Column(String(20), nullable=False)
+    from_status = Column(String(60))
+    to_status = Column(String(60), nullable=False)
     actor_id = Column(Integer, ForeignKey('users.id'), nullable=False)
     note = Column(Text)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
@@ -371,4 +380,130 @@ class TemplateClientAssignment(Base):
             "template_id": self.template_id,
             "client_id": self.client_id,
             "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
+
+class WorkflowGroup(Base):
+    # A firm-defined team ("Compliance," "Client Reporting," "Portfolio
+    # Managers"...) that a workflow diagram node can be assigned to. Deliberately
+    # separate from User.role (system permissions) -- a group is about who does
+    # the next step of production work, not what a user is allowed to do in the
+    # app generally.
+    __tablename__ = 'workflow_groups'
+    id = Column(Integer, primary_key=True)
+    name = Column(String(100), unique=True, nullable=False)
+    description = Column(Text, nullable=True)
+    created_by = Column(Integer, ForeignKey('users.id'), nullable=False)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+    def serialize(self):
+        return {
+            "id": self.id,
+            "name": self.name,
+            "description": self.description,
+            # No stored color column -- computed from id so recoloring never
+            # needs a migration, reusing the existing --cat-1..6 categorical
+            # palette already used for Team/Client/Asset-class chart groupings.
+            "color": f"cat-{(self.id % 6) + 1}",
+            "created_by": self.created_by,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
+
+class WorkflowGroupMembership(Base):
+    __tablename__ = 'workflow_group_memberships'
+    __table_args__ = (
+        UniqueConstraint('user_id', 'group_id', name='uq_workflow_group_membership'),
+    )
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
+    group_id = Column(Integer, ForeignKey('workflow_groups.id'), nullable=False)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+    def serialize(self):
+        return {
+            "id": self.id,
+            "user_id": self.user_id,
+            "group_id": self.group_id,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
+
+class WorkflowDiagram(Base):
+    # One version of a template's workflow graph. Editing a diagram creates a
+    # new version and flips is_active rather than mutating nodes/edges in
+    # place, so an in-flight Report (pinned to a specific diagram id via
+    # Report.workflow_diagram_id) is never rewritten out from under it.
+    __tablename__ = 'workflow_diagrams'
+    __table_args__ = (
+        UniqueConstraint('template_id', 'version', name='uq_workflow_diagram_template_version'),
+    )
+    id = Column(Integer, primary_key=True)
+    template_id = Column(Integer, ForeignKey('report_templates.id'), nullable=False)
+    version = Column(Integer, nullable=False)
+    is_active = Column(Boolean, nullable=False, default=False)
+    # nodes/edges: JSON lists, Text column + hand-rolled json.dumps/loads --
+    # same convention as ReportTemplate's components/header_config/etc, kept
+    # for SQLite/Postgres parity (no sa.JSON column type used anywhere in
+    # this codebase). Shape documented in workflow_engine.py.
+    nodes = Column(Text, nullable=False)
+    edges = Column(Text, nullable=False)
+    generated = Column(Boolean, nullable=False, default=False)  # True for migration-auto-generated diagrams, never hand-edited
+    created_by = Column(Integer, ForeignKey('users.id'), nullable=False)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+    def nodes_list(self):
+        return json.loads(self.nodes) if self.nodes else []
+
+    def edges_list(self):
+        return json.loads(self.edges) if self.edges else []
+
+    def serialize(self):
+        return {
+            "id": self.id,
+            "template_id": self.template_id,
+            "version": self.version,
+            "is_active": self.is_active,
+            "nodes": self.nodes_list(),
+            "edges": self.edges_list(),
+            "generated": self.generated,
+            "created_by": self.created_by,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
+
+class ReportStepInstance(Base):
+    # Source of truth for "where is this report" once it has a
+    # workflow_diagram_id -- a report can have several 'active' rows at once
+    # (parallel branches), which Report.status (a single string) can't
+    # represent. No uniqueness constraint on (report_id, node_id): a report
+    # can revisit a node (e.g. a "Request changes" edge routing back to
+    # Draft), and each visit gets its own row so later duration analytics see
+    # every visit, not just the latest.
+    __tablename__ = 'report_step_instances'
+    __table_args__ = (
+        Index('ix_report_step_instances_report_state', 'report_id', 'state'),
+        Index('ix_report_step_instances_report_node', 'report_id', 'node_id'),
+    )
+    id = Column(Integer, primary_key=True)
+    report_id = Column(Integer, ForeignKey('reports.id'), nullable=False)
+    node_id = Column(String(64), nullable=False)  # matches a node "id" in the report's pinned diagram JSON
+    node_name = Column(String(150), nullable=False)  # snapshot at entry time -- renaming a node later doesn't rewrite history
+    group_id = Column(Integer, ForeignKey('workflow_groups.id'), nullable=True)  # snapshot at entry time; null = generic/any staff
+    state = Column(String(20), nullable=False, default='active')  # 'active' | 'done' | 'skipped'
+    entered_at = Column(DateTime, default=datetime.datetime.utcnow)
+    completed_at = Column(DateTime, nullable=True)
+    completed_by = Column(Integer, ForeignKey('users.id'), nullable=True)
+    action_taken = Column(String(60), nullable=True)  # the edge action_label used to leave this node
+    note = Column(Text, nullable=True)
+
+    def serialize(self):
+        return {
+            "id": self.id,
+            "report_id": self.report_id,
+            "node_id": self.node_id,
+            "node_name": self.node_name,
+            "group_id": self.group_id,
+            "state": self.state,
+            "entered_at": self.entered_at.isoformat() if self.entered_at else None,
+            "completed_at": self.completed_at.isoformat() if self.completed_at else None,
+            "completed_by": self.completed_by,
+            "action_taken": self.action_taken,
+            "note": self.note,
         }

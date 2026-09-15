@@ -11,7 +11,7 @@ from renderers import CONTENT_TYPES, RENDERERS
 from report_content import resolve_report_content, reviewable_components
 from report_generator import generate_pdf
 from routes.auth import require_auth
-from workflow import InvalidTransition, apply_transition, requires_compliance
+from workflow_legacy import InvalidTransition, apply_transition, requires_compliance
 
 reports_blueprint = Blueprint('reports', __name__)
 

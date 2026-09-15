@@ -1,3 +1,9 @@
+# The original fixed five-status engine (draft/review/compliance/approved/
+# distributed). Superseded by workflow_engine.py's generic, per-template
+# diagram-driven engine, but kept unmodified here: it's still the active path
+# for any report/template that predates the workflow-diagrams migration
+# (`flask migrate-workflow-diagrams`), and is what that migration's
+# auto-generated diagrams are built to reproduce exactly.
 from database import db_session
 from models import ReportTransition
 
