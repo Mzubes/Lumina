@@ -129,74 +129,90 @@ const ReportDetail = () => {
           <span className="eyebrow">{REPORT_TYPE_LABEL[report.report_type] || 'Report'}</span>
           <h1>{report.title}</h1>
         </div>
-        <span className={`status-badge status-${report.status}`}>{STATUS_LABEL[report.status] || report.status}</span>
+        <div className="report-detail-header-actions">
+          {availableActions.map(({ action, label, tone }) => (
+            <button
+              key={action} type={tone === 'neutral' ? undefined : 'button'}
+              className={`action-btn-lg ${tone && tone !== 'neutral' ? `action-btn tone-${tone}` : ''}`}
+              onClick={() => handleAction(action)}
+            >
+              {label}
+            </button>
+          ))}
+          <span className={`status-badge status-${report.status}`}>{STATUS_LABEL[report.status] || report.status}</span>
+        </div>
       </div>
 
-      <section className="panel report-detail-meta">
-        <dl className="report-detail-fields">
-          <div><dt>Client</dt><dd>{clientName}</dd></div>
-          <div><dt>Team</dt><dd>{report.team || '—'}</dd></div>
-          <div><dt>Created</dt><dd>{formatDate(report.created_at)}</dd></div>
-          <div><dt>Last updated</dt><dd>{formatDate(report.updated_at)}</dd></div>
-        </dl>
-        <div className="report-detail-actions">
-          {availableActions.map(({ action, label }) => (
-            <button key={action} onClick={() => handleAction(action)}>{label}</button>
-          ))}
-          <select
-            value="" onChange={(event) => { const format = event.target.value; if (format) handleExport(format); event.target.value = ''; }}
-          >
-            <option value="">Export as…</option>
-            {EXPORT_FORMATS.map(({ value, label }) => (
-              <option key={value} value={value} disabled={!report.template_id && value !== 'pdf'}>{label}</option>
-            ))}
-          </select>
-        </div>
-        {flash && <p className="form-message form-message-success">✓ {flash}</p>}
-        {error && <p className="form-message">{error}</p>}
-      </section>
+      {flash && <p className="form-message form-message-success">✓ {flash}</p>}
+      {error && <p className="form-message">{error}</p>}
 
-      <section className="panel">
-        <div className="panel-header"><h2>Workflow</h2></div>
-        <WorkflowStepper status={report.status} complianceRequired={!!report.complianceRequired} />
-      </section>
+      <div className="report-detail-layout">
+        <div className="report-detail-main">
+          <section className="panel">
+            <div className="panel-header"><h2>Workflow</h2></div>
+            <WorkflowStepper status={report.status} complianceRequired={!!report.complianceRequired} />
+          </section>
 
-      <section className="panel">
-        <div className="panel-header"><h2>Document preview</h2></div>
-        {report.template_id ? (
-          content ? (
-            <div className="document-preview">
-              {content.components.map((component, index) => <DocumentBlock component={component} key={index} />)}
-              {content.components.length === 0 && <p className="panel-subtitle">This document has no content sections yet.</p>}
-            </div>
-          ) : <p className="panel-subtitle">Loading preview…</p>
-        ) : (
-          <p className="panel-subtitle">This report has no template, so there's no live preview — use Export → PDF to view it.</p>
-        )}
-      </section>
-
-      {role !== 'client' && (
-        <section className="panel">
-          <div className="panel-header"><h2>History</h2></div>
-          <ul className="timeline">
-            {history.map(entry => (
-              <li className="timeline-item" key={entry.id}>
-                <div className="timeline-marker" />
-                <div className="timeline-body">
-                  <div className="timeline-transition">
-                    {entry.from_status && <span className={`status-badge status-${entry.from_status}`}>{STATUS_LABEL[entry.from_status] || entry.from_status}</span>}
-                    {entry.from_status && <span className="timeline-arrow">→</span>}
-                    <span className={`status-badge status-${entry.to_status}`}>{STATUS_LABEL[entry.to_status] || entry.to_status}</span>
-                  </div>
-                  <div className="timeline-meta">{entry.actor_email} · {formatDate(entry.created_at)}</div>
-                  {entry.note && <div className="timeline-note">“{entry.note}”</div>}
+          <section className="panel">
+            <div className="panel-header"><h2>Document preview</h2></div>
+            {report.template_id ? (
+              content ? (
+                <div className="document-preview">
+                  {content.components.map((component, index) => <DocumentBlock component={component} key={index} />)}
+                  {content.components.length === 0 && <p className="panel-subtitle">This document has no content sections yet.</p>}
                 </div>
-              </li>
-            ))}
-            {history.length === 0 && <li className="timeline-empty">No workflow activity yet.</li>}
-          </ul>
-        </section>
-      )}
+              ) : <p className="panel-subtitle">Loading preview…</p>
+            ) : (
+              <p className="panel-subtitle">This report has no template, so there's no live preview — use Export → PDF to view it.</p>
+            )}
+          </section>
+        </div>
+
+        <div className="report-detail-sidebar">
+          <section className="panel">
+            <div className="panel-header"><h2>Request details</h2></div>
+            <dl className="report-detail-fields">
+              <div><dt>Client</dt><dd>{clientName}</dd></div>
+              <div><dt>Team</dt><dd>{report.team || '—'}</dd></div>
+              <div><dt>Compliance required</dt><dd>{report.complianceRequired ? 'Yes' : 'No'}</dd></div>
+              <div><dt>Created</dt><dd>{formatDate(report.created_at)}</dd></div>
+              <div><dt>Last updated</dt><dd>{formatDate(report.updated_at)}</dd></div>
+            </dl>
+            <select
+              className="report-detail-export"
+              value="" onChange={(event) => { const format = event.target.value; if (format) handleExport(format); event.target.value = ''; }}
+            >
+              <option value="">Export as…</option>
+              {EXPORT_FORMATS.map(({ value, label }) => (
+                <option key={value} value={value} disabled={!report.template_id && value !== 'pdf'}>{label}</option>
+              ))}
+            </select>
+          </section>
+
+          {role !== 'client' && (
+            <section className="panel">
+              <div className="panel-header"><h2>Activity</h2></div>
+              <ul className="timeline">
+                {history.map(entry => (
+                  <li className="timeline-item" key={entry.id}>
+                    <div className="timeline-marker" />
+                    <div className="timeline-body">
+                      <div className="timeline-transition">
+                        {entry.from_status && <span className={`status-badge status-${entry.from_status}`}>{STATUS_LABEL[entry.from_status] || entry.from_status}</span>}
+                        {entry.from_status && <span className="timeline-arrow">→</span>}
+                        <span className={`status-badge status-${entry.to_status}`}>{STATUS_LABEL[entry.to_status] || entry.to_status}</span>
+                      </div>
+                      <div className="timeline-meta">{entry.actor_email} · {formatDate(entry.created_at)}</div>
+                      {entry.note && <div className="timeline-note">“{entry.note}”</div>}
+                    </div>
+                  </li>
+                ))}
+                {history.length === 0 && <li className="timeline-empty">No workflow activity yet.</li>}
+              </ul>
+            </section>
+          )}
+        </div>
+      </div>
     </div>
   );
 };

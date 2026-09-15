@@ -10,16 +10,16 @@ export const STATUS_LABEL = {
 };
 
 export const ACTIONS_BY_STATUS = {
-  draft: [{ action: 'submit', label: 'Submit for review', roles: ['admin', 'editor'] }],
+  draft: [{ action: 'submit', label: 'Submit for review', roles: ['admin', 'editor'], tone: 'neutral' }],
   review: [
-    { action: 'approve', label: 'Approve', roles: ['admin'] },
-    { action: 'reject', label: 'Reject', roles: ['admin'] },
+    { action: 'approve', label: 'Approve', roles: ['admin'], tone: 'positive' },
+    { action: 'reject', label: 'Reject', roles: ['admin'], tone: 'negative' },
   ],
   compliance: [
-    { action: 'certify', label: 'Certify', roles: ['compliance'] },
-    { action: 'request-changes', label: 'Request changes', roles: ['compliance'] },
+    { action: 'certify', label: 'Certify', roles: ['compliance'], tone: 'positive' },
+    { action: 'request-changes', label: 'Request changes', roles: ['compliance'], tone: 'negative' },
   ],
-  approved: [{ action: 'distribute', label: 'Distribute', roles: ['admin', 'editor'] }],
+  approved: [{ action: 'distribute', label: 'Distribute', roles: ['admin', 'editor'], tone: 'neutral' }],
   distributed: [],
 };
 
@@ -72,8 +72,14 @@ const ReportsTable = ({ reports, role, onAction, onExport, emptyMessage = 'No re
           <td className="reports-table-actions">
             {(ACTIONS_BY_STATUS[report.status] || [])
               .filter(({ roles }) => roles.includes(role))
-              .map(({ action, label }) => (
-                <button key={action} onClick={() => onAction(report, action)}>{label}</button>
+              .map(({ action, label, tone }) => (
+                <button
+                  key={action} type={tone === 'neutral' ? undefined : 'button'}
+                  className={tone && tone !== 'neutral' ? `action-btn tone-${tone}` : undefined}
+                  onClick={() => onAction(report, action)}
+                >
+                  {label}
+                </button>
               ))}
           </td>
           {onExport && (

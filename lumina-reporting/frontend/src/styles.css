@@ -449,12 +449,28 @@ select { appearance: none; background-image: linear-gradient(45deg, transparent 
 /* ---------- report detail ---------- */
 .back-link { background: transparent; border: 0; color: var(--ink-secondary); font-size: 13px; padding: 0; margin-bottom: 16px; cursor: pointer; }
 .back-link:hover { color: var(--ink-primary); }
-.report-detail-meta { display: flex; flex-direction: column; gap: 18px; }
-.report-detail-fields { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; margin: 0; }
-.report-detail-fields dt { color: var(--ink-muted); font-size: 11.5px; text-transform: uppercase; letter-spacing: .06em; margin: 0 0 4px; }
-.report-detail-fields dd { margin: 0; color: var(--ink-primary); font-size: 14px; font-weight: 500; }
-.report-detail-actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
-.report-detail-actions select { width: auto; margin: 0; }
+
+.report-detail-header-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+
+/* Bordered, tinted "tone" buttons for workflow actions -- approve/certify read
+   positive (green), reject/request-changes read negative (red), distinct from
+   the default solid-brand button used for neutral forward actions. */
+.action-btn { background: transparent; border-width: 1.5px; border-style: solid; }
+.action-btn.tone-positive { color: #6ee7b7; border-color: color-mix(in srgb, var(--c-approved) 55%, transparent); background: color-mix(in srgb, var(--c-approved) 12%, transparent); }
+.action-btn.tone-positive:hover { background: color-mix(in srgb, var(--c-approved) 20%, transparent); }
+.action-btn.tone-negative { color: #fca5a5; border-color: color-mix(in srgb, var(--c-critical) 55%, transparent); background: color-mix(in srgb, var(--c-critical) 14%, transparent); }
+.action-btn.tone-negative:hover { background: color-mix(in srgb, var(--c-critical) 22%, transparent); }
+.action-btn-lg { padding: 11px 20px; font-size: 14px; }
+
+.report-detail-layout { display: grid; grid-template-columns: 1fr 340px; gap: 20px; align-items: start; margin-top: 20px; }
+.report-detail-main, .report-detail-sidebar { display: flex; flex-direction: column; gap: 20px; }
+.report-detail-main .panel, .report-detail-sidebar .panel { margin: 0; }
+
+.report-detail-fields { display: flex; flex-direction: column; gap: 14px; margin: 0; }
+.report-detail-fields > div { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.report-detail-fields dt { color: var(--ink-muted); font-size: 12px; margin: 0; }
+.report-detail-fields dd { margin: 0; color: var(--ink-primary); font-size: 13.5px; font-weight: 500; text-align: right; }
+.report-detail-export { width: 100%; margin-top: 16px; }
 
 .document-preview { background: var(--input-bg); border: 1px solid var(--panel-border); border-radius: var(--radius-md); padding: 28px 32px; }
 .document-block { margin-bottom: 28px; }
@@ -492,7 +508,7 @@ select { appearance: none; background-image: linear-gradient(45deg, transparent 
   .metric-grid { grid-template-columns: 1fr; }
   .component-row-header select, .component-row-header input { flex: 1 1 100%; }
   .bar-chart-row { grid-template-columns: 74px 1fr 26px; gap: 10px; }
-  .report-detail-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .report-detail-layout { grid-template-columns: 1fr; }
   .workflow-stepper { overflow-x: auto; padding-bottom: 4px; }
   .stepper-step { min-width: 78px; }
   .document-preview { padding: 18px; }
