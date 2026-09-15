@@ -1,7 +1,7 @@
 import datetime
 
 from database import db_session
-from models import Client, Holding, PerformanceSnapshot, Report, ReportTemplate
+from models import Client, Disclosure, Holding, PerformanceSnapshot, Report, ReportTemplate
 
 def _scoped(query, report):
     query = query.filter_by(client_id=report.client_id)
@@ -77,6 +77,23 @@ def _resolve_text_block(report, component):
         'text': component.get('data_binding', {}).get('static_text', ''),
     }
 
+def _resolve_data_table(report, component):
+    data_binding = component.get('data_binding', {})
+    return {
+        'type': 'data_table',
+        'title': component.get('title', 'Table'),
+        'columns': data_binding.get('columns', []),
+        'rows': data_binding.get('rows', []),
+    }
+
+def _resolve_people_grid(report, component):
+    data_binding = component.get('data_binding', {})
+    return {
+        'type': 'people_grid',
+        'title': component.get('title', 'Team'),
+        'people': data_binding.get('rows', []),
+    }
+
 def _placeholder(title, text):
     return [{'type': 'text_block', 'title': title, 'text': text}]
 
@@ -121,7 +138,21 @@ RESOLVERS = {
     'performance_summary': _resolve_performance_summary,
     'text_block': _resolve_text_block,
     'report_reference': _resolve_report_reference,
+    'data_table': _resolve_data_table,
+    'people_grid': _resolve_people_grid,
 }
+
+def _resolve_disclosures(template):
+    disclosure_ids = template.disclosure_ids_list()
+    if not disclosure_ids:
+        return []
+    disclosures = db_session.query(Disclosure).filter(Disclosure.id.in_(disclosure_ids)).all()
+    by_id = {disclosure.id: disclosure for disclosure in disclosures}
+    # Preserve the order the template attached them in, not query order.
+    return [
+        {'type': 'text_block', 'title': by_id[disclosure_id].title, 'text': by_id[disclosure_id].body}
+        for disclosure_id in disclosure_ids if disclosure_id in by_id
+    ]
 
 def resolve_report_content(report, template):
     client = db_session.query(Client).filter_by(id=report.client_id).first()
@@ -135,9 +166,12 @@ def resolve_report_content(report, template):
             components.extend(result)
         else:
             components.append(result)
+    components.extend(_resolve_disclosures(template))
     return {
         'report_title': report.title,
         'client_name': client.name if client else None,
         'generated_at': datetime.datetime.utcnow().isoformat(),
         'components': components,
+        'header_config': template.header_config_dict(),
+        'footer_config': template.footer_config_dict(),
     }

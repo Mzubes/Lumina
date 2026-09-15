@@ -19,6 +19,10 @@ def _render_csv(content):
         writer.writerow([f"# {component['title']}"])
         if component['type'] == 'text_block':
             writer.writerow([component.get('text', '')])
+        elif component['type'] == 'people_grid':
+            for person in component.get('people', []):
+                subtitle = ' · '.join(part for part in [person.get('title'), person.get('detail')] if part)
+                writer.writerow([person.get('name', ''), subtitle])
         else:
             writer.writerow(component.get('columns', []))
             for row in component.get('rows', []):

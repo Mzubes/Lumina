@@ -1,4 +1,7 @@
-COMPONENT_TYPES = {'holdings_table', 'performance_summary', 'text_block', 'report_reference'}
+COMPONENT_TYPES = {
+    'holdings_table', 'performance_summary', 'text_block', 'report_reference',
+    'data_table', 'people_grid',
+}
 
 def validate_components(components):
     if not isinstance(components, list) or not components:
@@ -28,5 +31,20 @@ def validate_components(components):
             return 'text_block components need data_binding.static_text'
         if comp_type == 'report_reference' and not isinstance(data_binding.get('report_id'), int):
             return 'report_reference components need an integer data_binding.report_id'
+        if comp_type == 'data_table':
+            columns = data_binding.get('columns')
+            rows = data_binding.get('rows')
+            if not isinstance(columns, list) or not columns:
+                return 'data_table components need a non-empty data_binding.columns list'
+            if not isinstance(rows, list):
+                return 'data_table components need a data_binding.rows list'
+            if any(not isinstance(row, list) or len(row) != len(columns) for row in rows):
+                return 'each data_table row must have one value per column'
+        if comp_type == 'people_grid':
+            people = data_binding.get('rows')
+            if not isinstance(people, list) or not people:
+                return 'people_grid components need a non-empty data_binding.rows list'
+            if any(not isinstance(person, dict) or not person.get('name') for person in people):
+                return 'each people_grid row needs at least a name'
 
     return None

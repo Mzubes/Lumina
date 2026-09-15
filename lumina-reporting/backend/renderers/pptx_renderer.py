@@ -26,6 +26,13 @@ def render_pptx(content):
             body_box = slide.shapes.add_textbox(Inches(0.4), Inches(1.3), Inches(9), Inches(5))
             body_box.text_frame.word_wrap = True
             body_box.text_frame.text = component.get('text', '')
+        elif component['type'] == 'people_grid':
+            body_box = slide.shapes.add_textbox(Inches(0.4), Inches(1.3), Inches(9), Inches(5))
+            body_box.text_frame.word_wrap = True
+            for index, person in enumerate(component.get('people', [])):
+                paragraph = body_box.text_frame.paragraphs[0] if index == 0 else body_box.text_frame.add_paragraph()
+                subtitle = ' · '.join(part for part in [person.get('title'), person.get('detail')] if part)
+                paragraph.text = f"{person.get('name', '')}" + (f" — {subtitle}" if subtitle else '')
         else:
             columns = component.get('columns', [])
             rows = component.get('rows', [])

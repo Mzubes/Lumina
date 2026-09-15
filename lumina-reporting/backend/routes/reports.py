@@ -114,10 +114,13 @@ def create_report():
     data = request.get_json(silent=True) or {}
     title = data.get('title')
     client_id = data.get('client_id')
-    if not title or not client_id:
-        return jsonify({'message': 'title and client_id are required'}), 400
-    if not db_session.query(Client).filter_by(id=client_id).first():
+    fund_id = data.get('fund_id')
+    if not title or (not client_id and not fund_id):
+        return jsonify({'message': 'title and (client_id or fund_id) are required'}), 400
+    if client_id and not db_session.query(Client).filter_by(id=client_id).first():
         return jsonify({'message': 'Unknown client_id'}), 400
+    if fund_id and not db_session.query(FundData).filter_by(id=fund_id).first():
+        return jsonify({'message': 'Unknown fund_id'}), 400
 
     template = None
     template_id = data.get('template_id')
@@ -128,8 +131,8 @@ def create_report():
 
     report = Report(
         title=title,
-        client_id=client_id,
-        fund_id=data.get('fund_id'),
+        client_id=client_id or None,
+        fund_id=fund_id or None,
         template_id=template.id if template else None,
         team=data.get('team') or None,
         report_type=data.get('report_type') or None,

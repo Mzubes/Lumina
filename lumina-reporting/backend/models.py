@@ -32,14 +32,36 @@ def _validate_client_role(mapper, connection, user):
     if user.role == 'client' and user.client_id is None:
         raise ValueError("role 'client' requires client_id to be set")
 
+def _require_client_or_fund(mapper, connection, instance):
+    # A row must be scoped to at least one of a client's own portfolio or a
+    # fund/strategy's own model portfolio (shared across every client
+    # invested in it). Both may be set together (e.g. one client's holding
+    # attributed to a specific fund) -- _scoped() in report_content.py
+    # already narrows by fund_id within a client when both are present.
+    label = instance.__class__.__name__
+    if instance.client_id is None and instance.fund_id is None:
+        raise ValueError(f"{label} requires either client_id or fund_id to be set")
+
 class FundData(Base):
     __tablename__ = 'fund_data'
     id = Column(Integer, primary_key=True)
     name = Column(String(100))
     asset_class = Column(String(50))
+    ticker = Column(String(20), nullable=True)
+    inception_date = Column(Date, nullable=True)
+    description = Column(Text, nullable=True)
+    investment_universe = Column(String(150), nullable=True)
 
     def serialize(self):
-        return {"id": self.id, "name": self.name, "asset_class": self.asset_class}
+        return {
+            "id": self.id,
+            "name": self.name,
+            "asset_class": self.asset_class,
+            "ticker": self.ticker,
+            "inception_date": self.inception_date.isoformat() if self.inception_date else None,
+            "description": self.description,
+            "investment_universe": self.investment_universe,
+        }
 
 class Client(Base):
     __tablename__ = 'clients'
@@ -51,11 +73,32 @@ class Client(Base):
     def serialize(self):
         return {"id": self.id, "name": self.name, "contact_email": self.contact_email}
 
+class Contact(Base):
+    __tablename__ = 'contacts'
+    id = Column(Integer, primary_key=True)
+    client_id = Column(Integer, ForeignKey('clients.id'), nullable=False)
+    name = Column(String(150), nullable=False)
+    email = Column(String(100), nullable=True)
+    title = Column(String(100), nullable=True)
+    phone = Column(String(30), nullable=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+    def serialize(self):
+        return {
+            "id": self.id,
+            "client_id": self.client_id,
+            "name": self.name,
+            "email": self.email,
+            "title": self.title,
+            "phone": self.phone,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
+
 class Report(Base):
     __tablename__ = 'reports'
     id = Column(Integer, primary_key=True)
     title = Column(String(200), nullable=False)
-    client_id = Column(Integer, ForeignKey('clients.id'), nullable=False)
+    client_id = Column(Integer, ForeignKey('clients.id'), nullable=True)
     fund_id = Column(Integer, ForeignKey('fund_data.id'), nullable=True)
     template_id = Column(Integer, ForeignKey('report_templates.id'), nullable=True)
     team = Column(String(60), nullable=True)
@@ -81,6 +124,9 @@ class Report(Base):
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }
+
+event.listens_for(Report, 'before_insert')(_require_client_or_fund)
+event.listens_for(Report, 'before_update')(_require_client_or_fund)
 
 class ReportTransition(Base):
     __tablename__ = 'report_transitions'
@@ -141,6 +187,9 @@ class ReportTemplate(Base):
     name = Column(String(150), nullable=False)
     description = Column(Text, nullable=True)
     components = Column(Text, nullable=False)  # JSON list, order = document order
+    disclosure_ids = Column(Text, nullable=True)  # JSON list of Disclosure ids, appended as trailing text blocks
+    header_config = Column(Text, nullable=True)  # JSON: {title, subtitle} shown on every rendered page
+    footer_config = Column(Text, nullable=True)  # JSON: {text} shown on every rendered page, plus page numbers
     created_by = Column(Integer, ForeignKey('users.id'), nullable=False)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
@@ -148,12 +197,24 @@ class ReportTemplate(Base):
     def components_list(self):
         return json.loads(self.components) if self.components else []
 
+    def disclosure_ids_list(self):
+        return json.loads(self.disclosure_ids) if self.disclosure_ids else []
+
+    def header_config_dict(self):
+        return json.loads(self.header_config) if self.header_config else {}
+
+    def footer_config_dict(self):
+        return json.loads(self.footer_config) if self.footer_config else {}
+
     def serialize(self):
         return {
             "id": self.id,
             "name": self.name,
             "description": self.description,
             "components": self.components_list(),
+            "disclosure_ids": self.disclosure_ids_list(),
+            "header_config": self.header_config_dict(),
+            "footer_config": self.footer_config_dict(),
             "created_by": self.created_by,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
@@ -162,7 +223,7 @@ class ReportTemplate(Base):
 class Holding(Base):
     __tablename__ = 'holdings'
     id = Column(Integer, primary_key=True)
-    client_id = Column(Integer, ForeignKey('clients.id'), nullable=False)
+    client_id = Column(Integer, ForeignKey('clients.id'), nullable=True)
     fund_id = Column(Integer, ForeignKey('fund_data.id'), nullable=True)
     as_of_date = Column(Date, nullable=False)
     security_id = Column(String(50), nullable=False)
@@ -190,10 +251,13 @@ class Holding(Base):
             "weight_pct": float(self.weight_pct) if self.weight_pct is not None else None,
         }
 
+event.listens_for(Holding, 'before_insert')(_require_client_or_fund)
+event.listens_for(Holding, 'before_update')(_require_client_or_fund)
+
 class PerformanceSnapshot(Base):
     __tablename__ = 'performance_snapshots'
     id = Column(Integer, primary_key=True)
-    client_id = Column(Integer, ForeignKey('clients.id'), nullable=False)
+    client_id = Column(Integer, ForeignKey('clients.id'), nullable=True)
     fund_id = Column(Integer, ForeignKey('fund_data.id'), nullable=True)
     as_of_date = Column(Date, nullable=False)
     period_type = Column(String(10), nullable=False)  # MTD/QTD/YTD/1Y/ITD
@@ -211,4 +275,28 @@ class PerformanceSnapshot(Base):
             "period_type": self.period_type,
             "return_pct": float(self.return_pct) if self.return_pct is not None else None,
             "benchmark_return_pct": float(self.benchmark_return_pct) if self.benchmark_return_pct is not None else None,
+        }
+
+event.listens_for(PerformanceSnapshot, 'before_insert')(_require_client_or_fund)
+event.listens_for(PerformanceSnapshot, 'before_update')(_require_client_or_fund)
+
+class Disclosure(Base):
+    __tablename__ = 'disclosures'
+    id = Column(Integer, primary_key=True)
+    title = Column(String(200), nullable=False)
+    body = Column(Text, nullable=False)
+    category = Column(String(60), nullable=True)
+    created_by = Column(Integer, ForeignKey('users.id'), nullable=False)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+
+    def serialize(self):
+        return {
+            "id": self.id,
+            "title": self.title,
+            "body": self.body,
+            "category": self.category,
+            "created_by": self.created_by,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }

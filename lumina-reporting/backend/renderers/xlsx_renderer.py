@@ -28,6 +28,12 @@ def render_xlsx(content):
             summary_sheet.append([component['title']])
             summary_sheet.append([component.get('text', '')])
             summary_sheet.append([])
+        elif component['type'] == 'people_grid':
+            summary_sheet.append([component['title']])
+            for person in component.get('people', []):
+                subtitle = ' · '.join(part for part in [person.get('title'), person.get('detail')] if part)
+                summary_sheet.append([person.get('name', ''), subtitle])
+            summary_sheet.append([])
         else:
             sheet = workbook.create_sheet(_safe_sheet_name(component['title'], used_names))
             sheet.append(component.get('columns', []))
