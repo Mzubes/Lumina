@@ -11,6 +11,11 @@ const COMPONENT_TYPES = [
 
 const PERIOD_TYPES = ['MTD', 'QTD', 'YTD', '1Y', 'ITD'];
 
+const CHART_TYPES = [
+  { value: 'none', label: 'None (table only)' },
+  { value: 'bar_comparison', label: 'Bar comparison (col 2 vs. col 3)' },
+];
+
 const newComponent = () => ({
   id: `comp-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
   type: 'holdings_table',
@@ -19,7 +24,8 @@ const newComponent = () => ({
   staticText: '',
   tableColumns: ['Metric', 'Value'],
   tableRows: [['', '']],
-  people: [{ name: '', title: '', detail: '' }],
+  chartType: 'none',
+  people: [{ name: '', title: '', detail: '', photoUrl: '' }],
 });
 
 const toApiComponents = (components) => components.map((component) => {
@@ -33,10 +39,16 @@ const toApiComponents = (components) => components.map((component) => {
     };
   }
   if (component.type === 'data_table') {
-    return { id: component.id, type: component.type, title: component.title, data_binding: { columns: component.tableColumns, rows: component.tableRows } };
+    return {
+      id: component.id, type: component.type, title: component.title,
+      data_binding: { columns: component.tableColumns, rows: component.tableRows, chart_type: component.chartType || 'none' },
+    };
   }
   if (component.type === 'people_grid') {
-    return { id: component.id, type: component.type, title: component.title, data_binding: { rows: component.people } };
+    return {
+      id: component.id, type: component.type, title: component.title,
+      data_binding: { rows: component.people.map(p => ({ name: p.name, title: p.title, detail: p.detail, photo_url: p.photoUrl || undefined })) },
+    };
   }
   return {
     id: component.id, type: component.type, title: component.title,
@@ -52,7 +64,9 @@ const fromApiComponents = (apiComponents) => apiComponents.map((component) => ({
   staticText: (component.data_binding && component.data_binding.static_text) || '',
   tableColumns: (component.data_binding && component.data_binding.columns) || ['Metric', 'Value'],
   tableRows: (component.data_binding && component.data_binding.rows) || [['', '']],
-  people: (component.data_binding && component.data_binding.rows) || [{ name: '', title: '', detail: '' }],
+  chartType: (component.data_binding && component.data_binding.chart_type) || 'none',
+  people: ((component.data_binding && component.data_binding.rows) || [{ name: '', title: '', detail: '', photoUrl: '' }])
+    .map(p => ({ name: p.name || '', title: p.title || '', detail: p.detail || '', photoUrl: p.photo_url || '' })),
 }));
 
 const Templates = () => {
@@ -67,6 +81,9 @@ const Templates = () => {
   const [headerTitle, setHeaderTitle] = useState('');
   const [headerSubtitle, setHeaderSubtitle] = useState('');
   const [footerText, setFooterText] = useState('');
+  const [primaryColor, setPrimaryColor] = useState('');
+  const [accentColor, setAccentColor] = useState('');
+  const [logoUrl, setLogoUrl] = useState('');
 
   const loadTemplates = () => {
     if (isDemoMode) return;
@@ -88,6 +105,9 @@ const Templates = () => {
     setHeaderTitle('');
     setHeaderSubtitle('');
     setFooterText('');
+    setPrimaryColor('');
+    setAccentColor('');
+    setLogoUrl('');
   };
 
   const startEdit = (template) => {
@@ -99,6 +119,9 @@ const Templates = () => {
     setHeaderTitle((template.header_config && template.header_config.title) || '');
     setHeaderSubtitle((template.header_config && template.header_config.subtitle) || '');
     setFooterText((template.footer_config && template.footer_config.text) || '');
+    setPrimaryColor((template.theme_config && template.theme_config.primary_color) || '');
+    setAccentColor((template.theme_config && template.theme_config.accent_color) || '');
+    setLogoUrl((template.theme_config && template.theme_config.logo_url) || '');
   };
 
   const updateComponent = (index, patch) => {
@@ -182,6 +205,8 @@ const Templates = () => {
       disclosure_ids: selectedDisclosureIds,
       header_config: (headerTitle || headerSubtitle) ? { title: headerTitle, subtitle: headerSubtitle } : null,
       footer_config: footerText ? { text: footerText } : null,
+      theme_config: (primaryColor || accentColor || logoUrl)
+        ? { primary_color: primaryColor || undefined, accent_color: accentColor || undefined, logo_url: logoUrl || undefined } : null,
     };
     try {
       if (editingId) {
@@ -245,6 +270,20 @@ const Templates = () => {
             <input placeholder="e.g. Acme Asset Management | (800) 555-0100 | acme.com" value={footerText} onChange={e => setFooterText(e.target.value)} />
           </label>
 
+          <h3>Theme</h3>
+          <p className="field-hint">Colors the PDF's header banner, section titles, table headers, and any charts. Leave blank for a plain, colorless document.</p>
+          <div className="theme-fields-row">
+            <label>Primary color
+              <input type="color" value={primaryColor || '#0d6b5f'} onChange={e => setPrimaryColor(e.target.value)} />
+            </label>
+            <label>Accent color
+              <input type="color" value={accentColor || '#c9bd9a'} onChange={e => setAccentColor(e.target.value)} />
+            </label>
+          </div>
+          <label>Logo URL
+            <input placeholder="https://... or a data: URI" value={logoUrl} onChange={e => setLogoUrl(e.target.value)} />
+          </label>
+
           <h3>Sections</h3>
           {components.map((component, index) => (
             <div className="component-row" key={component.id}>
@@ -286,6 +325,11 @@ const Templates = () => {
 
               {component.type === 'data_table' && (
                 <div className="data-table-editor">
+                  <label className="chart-type-label">Chart
+                    <select value={component.chartType || 'none'} onChange={e => updateComponent(index, { chartType: e.target.value })}>
+                      {CHART_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                    </select>
+                  </label>
                   <div className="data-table-editor-row data-table-editor-columns">
                     {component.tableColumns.map((col, colIndex) => (
                       <input
@@ -318,6 +362,7 @@ const Templates = () => {
                       <input placeholder="Name" value={person.name} onChange={e => updatePerson(index, personIndex, 'name', e.target.value)} />
                       <input placeholder="Title" value={person.title} onChange={e => updatePerson(index, personIndex, 'title', e.target.value)} />
                       <input placeholder="Detail" value={person.detail} onChange={e => updatePerson(index, personIndex, 'detail', e.target.value)} />
+                      <input placeholder="Photo URL (optional)" value={person.photoUrl} onChange={e => updatePerson(index, personIndex, 'photoUrl', e.target.value)} />
                       <button type="button" onClick={() => removePerson(index, personIndex)} disabled={component.people.length <= 1}>Remove</button>
                     </div>
                   ))}

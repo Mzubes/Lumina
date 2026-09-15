@@ -52,6 +52,31 @@ def test_export_pdf_survives_non_latin1_text(client, auth_headers, sample_client
     assert response.status_code == 200
     assert response.data[:4] == b'%PDF'
 
+def test_export_pdf_with_theme_logo_chart_and_photo(client, auth_headers, sample_client):
+    # A 1x1 PNG as a data: URI -- exercises the image-embedding path (logo,
+    # people_grid photo, matplotlib chart) with no real network call.
+    tiny_png = (
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
+    )
+    logo_uri = f"data:image/png;base64,{tiny_png}"
+    components = [
+        {"id": "c1", "type": "data_table", "title": "Sector Weights",
+         "data_binding": {"columns": ["Sector", "Strategy", "Index"], "rows": [["Tech", "10%", "20%"], ["Health", "5%", "8%"]],
+                           "chart_type": "bar_comparison"}},
+        {"id": "c2", "type": "people_grid", "title": "Team",
+         "data_binding": {"rows": [{"name": "Jane Doe", "title": "PM", "photo_url": logo_uri}]}},
+    ]
+    template = client.post('/api/templates', headers=auth_headers, json={
+        'name': 'Rich Template', 'components': components,
+        'theme_config': {'primary_color': '#0d6b5f', 'accent_color': '#c9bd9a', 'logo_url': logo_uri},
+        'header_config': {'title': 'Rich Factsheet', 'subtitle': 'As of today'},
+    }).get_json()
+    report = _create_templated_report(client, auth_headers, sample_client, template['id'])
+
+    response = client.get(f"/api/reports/{report['id']}/export?format=pdf", headers=auth_headers)
+    assert response.status_code == 200
+    assert response.data[:4] == b'%PDF'
+
 def test_export_pptx_and_xlsx_for_templated_report(client, auth_headers, sample_client):
     template = _create_template(client, auth_headers)
     report = _create_templated_report(client, auth_headers, sample_client, template['id'])

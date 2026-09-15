@@ -23,6 +23,31 @@ export async function publicFetch(path) {
   return data;
 }
 
+// Fetches a binary response (a PDF, typically) and hands back a blob: URL an
+// <iframe> can point at directly -- browsers render a PDF blob with their
+// own native viewer, so this needs no PDF-viewer library. Caller owns the
+// URL and must revoke it once done (e.g. on unmount or before fetching a
+// fresh one) to avoid leaking memory.
+export async function apiFetchBlobUrl(path) {
+  if (isDemoMode) throw new Error('API is not configured');
+  const token = window.localStorage.getItem('lumina_token');
+  const headers = {};
+  if (token) headers.Authorization = `Bearer ${token}`;
+  const response = await fetch(`${apiBaseUrl}${path}`, { headers });
+  if (!response.ok) throw new Error(`Request failed (${response.status})`);
+  const blob = await response.blob();
+  return window.URL.createObjectURL(blob);
+}
+
+// Same as apiFetchBlobUrl but for a public, no-auth export route.
+export async function publicFetchBlobUrl(path) {
+  if (isDemoMode) throw new Error('API is not configured');
+  const response = await fetch(`${apiBaseUrl}${path}`);
+  if (!response.ok) throw new Error(`Request failed (${response.status})`);
+  const blob = await response.blob();
+  return window.URL.createObjectURL(blob);
+}
+
 export async function apiDownload(path) {
   if (isDemoMode) throw new Error('Exporting becomes available when the API URL is configured.');
   const token = window.localStorage.getItem('lumina_token');

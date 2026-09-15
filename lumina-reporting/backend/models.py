@@ -190,6 +190,7 @@ class ReportTemplate(Base):
     disclosure_ids = Column(Text, nullable=True)  # JSON list of Disclosure ids, appended as trailing text blocks
     header_config = Column(Text, nullable=True)  # JSON: {title, subtitle} shown on every rendered page
     footer_config = Column(Text, nullable=True)  # JSON: {text} shown on every rendered page, plus page numbers
+    theme_config = Column(Text, nullable=True)  # JSON: {primary_color, accent_color, logo_url} -- hex colors; logo_url is https:// or a data: URI
     created_by = Column(Integer, ForeignKey('users.id'), nullable=False)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
@@ -206,6 +207,9 @@ class ReportTemplate(Base):
     def footer_config_dict(self):
         return json.loads(self.footer_config) if self.footer_config else {}
 
+    def theme_config_dict(self):
+        return json.loads(self.theme_config) if self.theme_config else {}
+
     def serialize(self):
         return {
             "id": self.id,
@@ -215,6 +219,7 @@ class ReportTemplate(Base):
             "disclosure_ids": self.disclosure_ids_list(),
             "header_config": self.header_config_dict(),
             "footer_config": self.footer_config_dict(),
+            "theme_config": self.theme_config_dict(),
             "created_by": self.created_by,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,

@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { apiBaseUrl, isDemoMode, publicFetch } from '../api';
-import DocumentBlock from '../components/DocumentBlock';
+import { apiBaseUrl, isDemoMode, publicFetch, publicFetchBlobUrl } from '../api';
 
 const EXPORT_FORMATS = [
   { value: 'pdf', label: 'PDF' },
@@ -12,12 +11,28 @@ const EXPORT_FORMATS = [
 const PublicReport = () => {
   const { token } = useParams();
   const [content, setContent] = useState(null);
+  const [previewUrl, setPreviewUrl] = useState(null);
   const [notFound, setNotFound] = useState(false);
 
   useEffect(() => {
     if (isDemoMode) { setNotFound(true); return; }
     publicFetch(`/api/public/reports/${token}`).then(setContent).catch(() => setNotFound(true));
   }, [token]);
+
+  useEffect(() => {
+    if (isDemoMode || !content) return;
+    let cancelled = false;
+    let objectUrl = null;
+    publicFetchBlobUrl(`/api/public/reports/${token}/export?format=pdf`).then(url => {
+      if (cancelled) { window.URL.revokeObjectURL(url); return; }
+      objectUrl = url;
+      setPreviewUrl(url);
+    }).catch(() => {});
+    return () => {
+      cancelled = true;
+      if (objectUrl) window.URL.revokeObjectURL(objectUrl);
+    };
+  }, [content, token]);
 
   return (
     <div className="public-report">
@@ -38,34 +53,28 @@ const PublicReport = () => {
 
       {!notFound && content && (
         <div className="public-report-body">
-          {content.header_config && content.header_config.title && (
+          {content.header_config && content.header_config.title ? (
             <div className="public-report-header">
               <span className="eyebrow">{content.header_config.subtitle}</span>
               <h1>{content.header_config.title}</h1>
             </div>
-          )}
-          {!content.header_config?.title && <h1>{content.report_title}</h1>}
+          ) : <h1>{content.report_title}</h1>}
 
-          {content.legacy_pdf_only ? (
-            <p className="panel-subtitle">This report is only available as a PDF.</p>
-          ) : (
-            <>
-              <div className="public-report-export">
-                {EXPORT_FORMATS.map(({ value, label }) => (
-                  <a
-                    key={value}
-                    href={`${apiBaseUrl}/api/public/reports/${token}/export?format=${value}`}
-                    target="_blank" rel="noreferrer"
-                  >
-                    Download {label}
-                  </a>
-                ))}
-              </div>
-              <div className="document-preview">
-                {content.components.map((component, index) => <DocumentBlock component={component} key={index} />)}
-              </div>
-            </>
-          )}
+          <div className="public-report-export">
+            {EXPORT_FORMATS.map(({ value, label }) => (
+              <a
+                key={value}
+                href={`${apiBaseUrl}/api/public/reports/${token}/export?format=${value}`}
+                target="_blank" rel="noreferrer"
+              >
+                Download {label}
+              </a>
+            ))}
+          </div>
+
+          {previewUrl
+            ? <iframe src={previewUrl} title="Report preview" className="document-preview-frame" />
+            : <p className="panel-subtitle">Loading preview…</p>}
 
           {content.footer_config && content.footer_config.text && (
             <p className="public-report-footer">{content.footer_config.text}</p>

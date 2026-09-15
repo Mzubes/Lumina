@@ -3,6 +3,8 @@ COMPONENT_TYPES = {
     'data_table', 'people_grid',
 }
 
+CHART_TYPES = {'none', 'bar_comparison'}
+
 def validate_components(components):
     if not isinstance(components, list) or not components:
         return 'components must be a non-empty list'
@@ -40,6 +42,9 @@ def validate_components(components):
                 return 'data_table components need a data_binding.rows list'
             if any(not isinstance(row, list) or len(row) != len(columns) for row in rows):
                 return 'each data_table row must have one value per column'
+            chart_type = data_binding.get('chart_type', 'none')
+            if chart_type not in CHART_TYPES:
+                return f"data_table chart_type must be one of {sorted(CHART_TYPES)}"
         if comp_type == 'people_grid':
             people = data_binding.get('rows')
             if not isinstance(people, list) or not people:

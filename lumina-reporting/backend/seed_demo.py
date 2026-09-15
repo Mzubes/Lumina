@@ -170,12 +170,12 @@ def _get_or_create_user(email, password, role, client_id=None):
     return user
 
 
-def _data_table(title, columns, rows):
+def _data_table(title, columns, rows, chart_type='none'):
     return {
         'id': title.lower().replace(' ', '-'),
         'type': 'data_table',
         'title': title,
-        'data_binding': {'columns': columns, 'rows': rows},
+        'data_binding': {'columns': columns, 'rows': rows, 'chart_type': chart_type},
     }
 
 
@@ -248,10 +248,10 @@ def seed_demo():
             'id': 'top-10-holdings', 'type': 'holdings_table', 'title': 'Top 10 Holdings',
             'data_binding': {'filters': {'as_of': 'latest'}},
         },
-        _data_table('Sector Weights', ['Sector', 'Strategy', 'Index'], SECTOR_WEIGHTS_ROWS),
-        _data_table('Region Concentration', ['Region', 'Strategy', 'Index'], REGION_CONCENTRATION_ROWS),
-        _data_table('Market Cap (USD)', ['Range', 'Strategy', 'Index'], MARKET_CAP_ROWS),
-        _data_table('Country Weights', ['Country', 'Strategy', 'Index'], COUNTRY_WEIGHTS_ROWS),
+        _data_table('Sector Weights', ['Sector', 'Strategy', 'Index'], SECTOR_WEIGHTS_ROWS, chart_type='bar_comparison'),
+        _data_table('Region Concentration', ['Region', 'Strategy', 'Index'], REGION_CONCENTRATION_ROWS, chart_type='bar_comparison'),
+        _data_table('Market Cap (USD)', ['Range', 'Strategy', 'Index'], MARKET_CAP_ROWS, chart_type='bar_comparison'),
+        _data_table('Country Weights', ['Country', 'Strategy', 'Index'], COUNTRY_WEIGHTS_ROWS, chart_type='bar_comparison'),
         {
             'id': 'performance-summary', 'type': 'performance_summary',
             'title': 'Performance Summary (Composite Gross vs. MSCI World Small Cap Index)',
@@ -276,6 +276,9 @@ def seed_demo():
         }),
         footer_config=json.dumps({
             'text': 'Pzena Investment Management, LLC | Confidential — for institutional use only',
+        }),
+        theme_config=json.dumps({
+            'primary_color': '#0d6b5f', 'accent_color': '#c9bd9a',
         }),
         created_by=admin.id,
     )

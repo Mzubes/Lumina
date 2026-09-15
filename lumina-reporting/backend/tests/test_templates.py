@@ -109,6 +109,35 @@ def test_create_template_with_header_footer_and_disclosures(client, editor_heade
     assert body['header_config']['title'] == 'ACME STRATEGY'
     assert body['footer_config']['text'] == 'Acme Asset Management'
 
+def test_create_template_with_theme_config(client, editor_headers):
+    response = client.post('/api/templates', headers=editor_headers, json={
+        'name': 'Themed Factsheet', 'components': VALID_COMPONENTS,
+        'theme_config': {'primary_color': '#0d6b5f', 'accent_color': '#c9bd9a', 'logo_url': 'https://example.com/logo.png'},
+    })
+    assert response.status_code == 201
+    body = response.get_json()
+    assert body['theme_config']['primary_color'] == '#0d6b5f'
+    assert body['theme_config']['logo_url'] == 'https://example.com/logo.png'
+
+    updated = client.put(f"/api/templates/{body['id']}", headers=editor_headers, json={
+        'theme_config': {'primary_color': '#111111'},
+    }).get_json()
+    assert updated['theme_config']['primary_color'] == '#111111'
+    assert 'logo_url' not in updated['theme_config']
+
+def test_data_table_chart_type_validation(client, editor_headers):
+    valid_chart_component = [{"id": "c1", "type": "data_table", "title": "Sector Weights",
+                               "data_binding": {"columns": ["Sector", "Strategy", "Index"],
+                                                 "rows": [["Tech", "10%", "20%"]], "chart_type": "bar_comparison"}}]
+    response = client.post('/api/templates', headers=editor_headers, json={'name': 'Chart Table', 'components': valid_chart_component})
+    assert response.status_code == 201
+    assert response.get_json()['components'][0]['data_binding']['chart_type'] == 'bar_comparison'
+
+    invalid_chart_component = [{"id": "c1", "type": "data_table", "title": "Sector Weights",
+                                 "data_binding": {"columns": ["A", "B"], "rows": [["x", "1"]], "chart_type": "pie"}}]
+    bad_response = client.post('/api/templates', headers=editor_headers, json={'name': 'Bad Chart', 'components': invalid_chart_component})
+    assert bad_response.status_code == 400
+
 def test_create_template_rejects_unknown_disclosure_id(client, editor_headers):
     response = client.post('/api/templates', headers=editor_headers, json={
         'name': 'Factsheet', 'components': VALID_COMPONENTS, 'disclosure_ids': [999999],

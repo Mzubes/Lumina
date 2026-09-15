@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { apiDownload, apiFetch, isDemoMode } from '../api';
-import DocumentBlock from './DocumentBlock';
+import { apiDownload, apiFetch, apiFetchBlobUrl, isDemoMode } from '../api';
 import DistributionPanel from './DistributionPanel';
 import { ACTIONS_BY_STATUS, EXPORT_FORMATS, STATUS_LABEL } from './ReportsTable';
 import WorkflowStepper from './charts/WorkflowStepper';
@@ -31,7 +30,8 @@ const ReportDetail = () => {
   const [clients, setClients] = useState([]);
   const [funds, setFunds] = useState([]);
   const [history, setHistory] = useState([]);
-  const [content, setContent] = useState(null);
+  const [previewUrl, setPreviewUrl] = useState(null);
+  const [previewError, setPreviewError] = useState('');
   const [notFound, setNotFound] = useState(false);
   const [error, setError] = useState('');
   const [flash, setFlash] = useState('');
@@ -55,8 +55,22 @@ const ReportDetail = () => {
   }, [role]);
 
   useEffect(() => {
-    if (isDemoMode || !report || !report.template_id) { setContent(null); return; }
-    apiFetch(`/api/reports/${report.id}/export?format=raw&raw_format=json`).then(setContent).catch(() => setContent(null));
+    // The preview IS the generated PDF -- fetched as a blob and handed to an
+    // <iframe>, so what's shown at every workflow stage is exactly the file
+    // that ships, not a lookalike rendering of the same data.
+    if (isDemoMode || !report || !report.template_id) { setPreviewUrl(null); return; }
+    let cancelled = false;
+    let objectUrl = null;
+    setPreviewError('');
+    apiFetchBlobUrl(`/api/reports/${report.id}/export?format=pdf`).then(url => {
+      if (cancelled) { window.URL.revokeObjectURL(url); return; }
+      objectUrl = url;
+      setPreviewUrl(url);
+    }).catch(requestError => { if (!cancelled) setPreviewError(requestError.message); });
+    return () => {
+      cancelled = true;
+      if (objectUrl) window.URL.revokeObjectURL(objectUrl);
+    };
   }, [report]);
 
   if (notFound) {
@@ -130,14 +144,16 @@ const ReportDetail = () => {
           </section>
 
           <section className="panel">
-            <div className="panel-header"><h2>Document preview</h2></div>
+            <div className="panel-header">
+              <h2>Document preview</h2>
+              <span className="panel-header-note">Showing the live, generated PDF</span>
+            </div>
             {report.template_id ? (
-              content ? (
-                <div className="document-preview">
-                  {content.components.map((component, index) => <DocumentBlock component={component} key={index} />)}
-                  {content.components.length === 0 && <p className="panel-subtitle">This document has no content sections yet.</p>}
-                </div>
-              ) : <p className="panel-subtitle">Loading preview…</p>
+              previewUrl ? (
+                <iframe src={previewUrl} title="Document preview" className="document-preview-frame" />
+              ) : previewError ? (
+                <p className="form-message">{previewError}</p>
+              ) : <p className="panel-subtitle">Generating preview…</p>
             ) : (
               <p className="panel-subtitle">This report has no template, so there's no live preview — use Export → PDF to view it.</p>
             )}

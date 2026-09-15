@@ -56,6 +56,7 @@ def create_template():
         disclosure_ids=json.dumps(disclosure_ids) if disclosure_ids else None,
         header_config=json.dumps(data.get('header_config')) if data.get('header_config') else None,
         footer_config=json.dumps(data.get('footer_config')) if data.get('footer_config') else None,
+        theme_config=json.dumps(data.get('theme_config')) if data.get('theme_config') else None,
         created_by=g.current_user['user_id'],
     )
     db_session.add(template)
@@ -87,6 +88,8 @@ def update_template(template_id):
         template.header_config = json.dumps(data['header_config']) if data['header_config'] else None
     if 'footer_config' in data:
         template.footer_config = json.dumps(data['footer_config']) if data['footer_config'] else None
+    if 'theme_config' in data:
+        template.theme_config = json.dumps(data['theme_config']) if data['theme_config'] else None
     db_session.commit()
     return jsonify(template.serialize())
 

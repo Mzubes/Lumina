@@ -84,6 +84,7 @@ def _resolve_data_table(report, component):
         'title': component.get('title', 'Table'),
         'columns': data_binding.get('columns', []),
         'rows': data_binding.get('rows', []),
+        'chart_type': data_binding.get('chart_type', 'none'),
     }
 
 def _resolve_people_grid(report, component):
@@ -174,4 +175,5 @@ def resolve_report_content(report, template):
         'components': components,
         'header_config': template.header_config_dict(),
         'footer_config': template.footer_config_dict(),
+        'theme_config': template.theme_config_dict(),
     }
