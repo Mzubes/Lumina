@@ -12,6 +12,17 @@ export async function apiFetch(path, options = {}) {
   return data;
 }
 
+// Public report links carry no login -- these hit the same API but never
+// attach an Authorization header, since the token in the URL path is itself
+// the credential.
+export async function publicFetch(path) {
+  if (isDemoMode) throw new Error('API is not configured');
+  const response = await fetch(`${apiBaseUrl}${path}`);
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data.message || `Request failed (${response.status})`);
+  return data;
+}
+
 export async function apiDownload(path) {
   if (isDemoMode) throw new Error('Exporting becomes available when the API URL is configured.');
   const token = window.localStorage.getItem('lumina_token');

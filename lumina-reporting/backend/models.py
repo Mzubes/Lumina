@@ -280,6 +280,27 @@ class PerformanceSnapshot(Base):
 event.listens_for(PerformanceSnapshot, 'before_insert')(_require_client_or_fund)
 event.listens_for(PerformanceSnapshot, 'before_update')(_require_client_or_fund)
 
+class DistributionLink(Base):
+    __tablename__ = 'distribution_links'
+    id = Column(Integer, primary_key=True)
+    report_id = Column(Integer, ForeignKey('reports.id'), nullable=False)
+    token = Column(String(64), unique=True, nullable=False)
+    contact_id = Column(Integer, ForeignKey('contacts.id'), nullable=True)
+    created_by = Column(Integer, ForeignKey('users.id'), nullable=False)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    revoked_at = Column(DateTime, nullable=True)
+
+    def serialize(self):
+        return {
+            "id": self.id,
+            "report_id": self.report_id,
+            "token": self.token,
+            "contact_id": self.contact_id,
+            "created_by": self.created_by,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "revoked_at": self.revoked_at.isoformat() if self.revoked_at else None,
+        }
+
 class Disclosure(Base):
     __tablename__ = 'disclosures'
     id = Column(Integer, primary_key=True)

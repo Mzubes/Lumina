@@ -12,6 +12,7 @@ from routes.data_hub import data_hub_blueprint
 from routes.data_sources import data_sources_blueprint
 from routes.disclosures import disclosures_blueprint
 from routes.portfolio import portfolio_blueprint
+from routes.public import public_blueprint
 from routes.reports import reports_blueprint
 from routes.templates import templates_blueprint
 
@@ -38,6 +39,7 @@ def create_app(test_config=None):
     app.register_blueprint(templates_blueprint)
     app.register_blueprint(portfolio_blueprint)
     app.register_blueprint(disclosures_blueprint)
+    app.register_blueprint(public_blueprint)
 
     @app.get('/api/health')
     def health():

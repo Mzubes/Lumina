@@ -1,10 +1,12 @@
+import datetime
+import secrets
 from pathlib import Path
 
 from flask import Blueprint, Response, g, jsonify, request
 
 from database import db_session
 from logs import log_action
-from models import Client, FundData, Report, ReportTemplate, ReportTransition, User
+from models import Client, Contact, DistributionLink, FundData, Report, ReportTemplate, ReportTransition, User
 from renderers import CONTENT_TYPES, RENDERERS
 from report_content import resolve_report_content
 from report_generator import generate_pdf
@@ -152,14 +154,10 @@ def create_report():
 
     return jsonify(_serialize_report(report)), 201
 
-@reports_blueprint.get('/api/reports/<int:report_id>/export')
-@require_auth()
-def export_report(report_id):
-    report = _get_scoped_report(report_id)
-    if not report:
-        return jsonify({'message': 'Report not found'}), 404
-
-    export_format = request.args.get('format', 'pdf')
+def render_export_response(report, export_format, raw_format='json'):
+    """Shared by the authenticated export route and the public distribution-link
+    route -- same formats, same rendering, the only difference is how the
+    caller establishes it may see this report at all."""
     if export_format not in RENDERERS:
         return jsonify({'message': f"Unsupported format '{export_format}'"}), 400
 
@@ -182,7 +180,6 @@ def export_report(report_id):
     content = resolve_report_content(report, template)
 
     if export_format == 'raw':
-        raw_format = request.args.get('raw_format', 'json')
         if raw_format not in ('json', 'csv'):
             return jsonify({'message': "raw_format must be 'json' or 'csv'"}), 400
         body = RENDERERS['raw'](content, raw_format=raw_format)
@@ -196,6 +193,16 @@ def export_report(report_id):
     return Response(
         body, mimetype=mimetype,
         headers={'Content-Disposition': f'attachment; filename="{filename}"'},
+    )
+
+@reports_blueprint.get('/api/reports/<int:report_id>/export')
+@require_auth()
+def export_report(report_id):
+    report = _get_scoped_report(report_id)
+    if not report:
+        return jsonify({'message': 'Report not found'}), 404
+    return render_export_response(
+        report, request.args.get('format', 'pdf'), request.args.get('raw_format', 'json'),
     )
 
 def _transition_route(action, roles):
@@ -236,3 +243,58 @@ reports_blueprint.add_url_rule(
     '/api/reports/<int:report_id>/request-changes', view_func=_transition_route('request_changes', ['compliance']),
     methods=['POST'], endpoint='request_changes_report',
 )
+
+@reports_blueprint.get('/api/reports/<int:report_id>/distribution-links')
+@require_auth(roles=['admin', 'editor', 'viewer', 'compliance'])
+def list_distribution_links(report_id):
+    report = _get_scoped_report(report_id)
+    if not report:
+        return jsonify({'message': 'Report not found'}), 404
+    links = (
+        db_session.query(DistributionLink).filter_by(report_id=report_id)
+        .order_by(DistributionLink.created_at.desc()).all()
+    )
+    return jsonify([link.serialize() for link in links])
+
+@reports_blueprint.post('/api/reports/<int:report_id>/distribution-links')
+@require_auth(roles=['admin', 'editor'])
+def create_distribution_link(report_id):
+    report = _get_scoped_report(report_id)
+    if not report:
+        return jsonify({'message': 'Report not found'}), 404
+    if report.status != 'distributed':
+        return jsonify({'message': 'Only distributed reports can be shared via a link'}), 409
+
+    data = request.get_json(silent=True) or {}
+    contact_id = data.get('contact_id')
+    if contact_id is not None:
+        if not report.client_id:
+            return jsonify({
+                'message': "This report has no client; create an anonymous link instead (omit contact_id)",
+            }), 400
+        contact = db_session.query(Contact).filter_by(id=contact_id, client_id=report.client_id).first()
+        if not contact:
+            return jsonify({'message': "Unknown contact_id for this report's client"}), 400
+
+    link = DistributionLink(
+        report_id=report.id, token=secrets.token_urlsafe(32),
+        contact_id=contact_id or None, created_by=g.current_user['user_id'],
+    )
+    db_session.add(link)
+    db_session.commit()
+    log_action(f"Distribution link created for report {report.id} from {request.remote_addr}")
+    return jsonify(link.serialize()), 201
+
+@reports_blueprint.post('/api/reports/<int:report_id>/distribution-links/<int:link_id>/revoke')
+@require_auth(roles=['admin', 'editor'])
+def revoke_distribution_link(report_id, link_id):
+    report = _get_scoped_report(report_id)
+    if not report:
+        return jsonify({'message': 'Report not found'}), 404
+    link = db_session.query(DistributionLink).filter_by(id=link_id, report_id=report_id).first()
+    if not link:
+        return jsonify({'message': 'Link not found'}), 404
+    if link.revoked_at is None:
+        link.revoked_at = datetime.datetime.utcnow()
+        db_session.commit()
+    return jsonify(link.serialize())

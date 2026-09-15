@@ -14,6 +14,7 @@ import ReportDetail from './components/ReportDetail';
 import Templates from './components/templates';
 import Login from './pages/Login';
 import ClientPortal from './pages/ClientPortal';
+import PublicReport from './pages/PublicReport';
 import {
   IconBadge, IconBriefcase, IconCheckCircle, IconClipboard, IconDashboard, IconDatabase, IconDocument,
   IconLayout, IconLogIn, IconLogOut, IconPlug, IconPresentation, IconShield, IconUsers,
@@ -95,32 +96,42 @@ function Sidebar() {
   );
 }
 
+function AuthenticatedShell() {
+  return (
+    <div className="app-shell">
+      <Sidebar />
+      <main className="main-content">
+        <Routes>
+          <Route path="/" element={<Dashboard />} />
+          <Route path="/data-hub" element={<DataHub />} />
+          <Route path="/data-sources" element={<DataSources />} />
+          <Route path="/templates" element={<Templates />} />
+          <Route path="/reports" element={<Reports />} />
+          <Route path="/reports/:id" element={<ReportDetail />} />
+          <Route path="/approvals" element={<Approvals />} />
+          <Route path="/compliance" element={<Compliance />} />
+          <Route path="/marketing" element={<Marketing />} />
+          <Route path="/pitch-books" element={<Pitchbooks />} />
+          <Route path="/clients" element={<Clients />} />
+          <Route path="/disclosures" element={<Disclosures />} />
+          <Route path="/client-portal" element={<ClientPortal />} />
+          <Route path="/login" element={<Login />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </main>
+    </div>
+  );
+}
+
 function App() {
   return (
     <HashRouter>
-      <div className="app-shell">
-        <Sidebar />
-        <main className="main-content">
-          <Routes>
-            <Route path="/" element={<Dashboard />} />
-            <Route path="/data-hub" element={<DataHub />} />
-            <Route path="/data-sources" element={<DataSources />} />
-            <Route path="/templates" element={<Templates />} />
-            <Route path="/reports" element={<Reports />} />
-            <Route path="/reports/:id" element={<ReportDetail />} />
-            <Route path="/approvals" element={<Approvals />} />
-            <Route path="/compliance" element={<Compliance />} />
-            <Route path="/marketing" element={<Marketing />} />
-            <Route path="/pitch-books" element={<Pitchbooks />} />
-            <Route path="/clients" element={<Clients />} />
-            <Route path="/disclosures" element={<Disclosures />} />
-            <Route path="/distribution" element={<Navigate to="/reports" replace />} />
-            <Route path="/client-portal" element={<ClientPortal />} />
-            <Route path="/login" element={<Login />} />
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
-        </main>
-      </div>
+      <Routes>
+        {/* Unauthenticated: a distributed report's share link. No sidebar, no
+            login, standalone -- everything else lives behind AuthenticatedShell. */}
+        <Route path="/public/:token" element={<PublicReport />} />
+        <Route path="/*" element={<AuthenticatedShell />} />
+      </Routes>
     </HashRouter>
   );
 }
