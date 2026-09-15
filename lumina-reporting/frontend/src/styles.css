@@ -738,6 +738,52 @@ select { appearance: none; background-image: linear-gradient(45deg, transparent 
 .workflow-group-swatch.swatch-cat-6 { background: var(--cat-6); }
 .workflow-group-swatch.swatch-cat-other { background: var(--cat-other); }
 
+/* ---------- workflow diagram editor ---------- */
+.workflow-editor { margin: 12px 0 4px; }
+.workflow-editor-toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.workflow-editor-toolbar button[type="button"] { padding: 8px 14px; font-size: 12.5px; }
+.workflow-editor-toolbar-message { color: var(--c-approved); font-size: 12.5px; font-weight: 600; }
+
+.workflow-editor-layout { display: flex; gap: 16px; align-items: stretch; }
+.workflow-node-palette { flex: 0 0 220px; max-height: none; }
+.workflow-node-palette .library-preset-card { cursor: grab; }
+
+.workflow-canvas-wrapper {
+  flex: 1; min-width: 0; height: 520px; border: 1px solid var(--panel-border);
+  border-radius: var(--radius-md); background: var(--page-bg-1); overflow: hidden; position: relative;
+}
+.workflow-canvas-wrapper .react-flow__attribution { display: none; }
+
+.workflow-node {
+  min-width: 168px; border: 1px solid var(--panel-border-strong); border-radius: var(--radius-md);
+  background: var(--panel-bg); box-shadow: var(--shadow-sm); padding: 10px 12px; font-family: var(--font-sans);
+}
+.workflow-node.is-selected { border-color: var(--brand); box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand) 18%, transparent); }
+.workflow-node-top { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-bottom: 4px; }
+.workflow-node-badge {
+  padding: 2px 7px; border-radius: 999px; background: var(--brand-tint); color: var(--brand);
+  font-size: 9.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em;
+}
+.workflow-node-name { font-size: 13px; font-weight: 600; color: var(--ink-primary); }
+.workflow-node-gate-badge {
+  margin-top: 6px; display: inline-block; padding: 2px 7px; border-radius: 999px; font-size: 9.5px; font-weight: 700;
+  background: color-mix(in srgb, var(--c-approved) 14%, white); color: var(--c-approved);
+}
+.workflow-node-start .workflow-node-badge { background: color-mix(in srgb, var(--c-draft) 16%, white); color: var(--c-draft); }
+.workflow-node-parallel_gateway .workflow-node-badge, .workflow-node-join .workflow-node-badge {
+  background: color-mix(in srgb, var(--c-compliance) 14%, white); color: var(--c-compliance);
+}
+.workflow-node-terminal .workflow-node-badge { background: color-mix(in srgb, var(--c-distributed) 14%, white); color: var(--c-distributed); }
+
+.workflow-inspector {
+  flex: 0 0 240px; border: 1px solid var(--panel-border); border-radius: var(--radius-md);
+  background: var(--panel-bg); padding: 16px; align-self: flex-start;
+}
+.workflow-inspector h4 { margin: 0 0 10px; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--ink-secondary); }
+.workflow-inspector label { display: block; margin: 0 0 10px; font-size: 12.5px; font-weight: 500; color: var(--ink-secondary); }
+.workflow-inspector input, .workflow-inspector select { margin: 4px 0 0; }
+.workflow-inspector button[type="button"] { margin-top: 4px; width: 100%; }
+
 /* ---------- public report page ---------- */
 .public-report { max-width: 860px; margin: 0 auto; padding: 32px 24px 60px; }
 .public-report-brand { display: flex; align-items: center; gap: 10px; margin-bottom: 28px; }
@@ -838,6 +884,9 @@ select { appearance: none; background-image: linear-gradient(45deg, transparent 
   .dashboard-toolbar { flex-direction: column; align-items: flex-start; }
   .template-builder-layout { flex-direction: column; }
   .component-library { flex: 1 1 auto; width: 100%; max-height: none; }
+  .workflow-editor-layout { flex-direction: column; }
+  .workflow-node-palette, .workflow-inspector { flex: 1 1 auto; width: 100%; }
+  .workflow-canvas-wrapper { height: 420px; }
   .canvas-card-fields { flex-direction: column; }
   .component-row-header select, .component-row-header input { flex: 1 1 100%; }
   .bar-chart-row { grid-template-columns: 74px 1fr 26px; gap: 10px; }

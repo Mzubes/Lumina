@@ -7,6 +7,7 @@ import { SortableContext, arrayMove, sortableKeyboardCoordinates, useSortable, v
 import { CSS } from '@dnd-kit/utilities';
 import { apiFetch, isDemoMode } from '../api';
 import { PRESETS_BY_ID, TEMPLATE_LIBRARY } from './templateLibrary';
+import WorkflowCanvas from './workflowEditor/WorkflowCanvas';
 
 const COMPONENT_TYPES = [
   { value: 'holdings_table', label: 'Holdings Table' },
@@ -652,6 +653,19 @@ const Templates = () => {
           </section>
         );
       })()}
+
+      {editingId && (
+        <section className="panel">
+          <h2>Workflow</h2>
+          <p className="field-hint">
+            How a report built from this template moves from draft to distribution -- firm-defined steps, assigned
+            to a workflow group or left generic, with parallel branches where more than one team needs to sign off
+            at once. New templates use the standard Draft → Review → Approved → Distributed pipeline until you
+            customize it here.
+          </p>
+          <WorkflowCanvas templateId={editingId} />
+        </section>
+      )}
 
       {flash && <p className="form-message form-message-success">✓ {flash}</p>}
       {error && <p className="form-message">{error}</p>}
