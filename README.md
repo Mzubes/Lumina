@@ -91,6 +91,48 @@ of this repo. `POST /api/data-sources/<id>/sync` also runs synchronously
 inside the request; a slow warehouse query can hit an HTTP timeout in
 production since there's no background task queue yet.
 
+## Deploy to Render (backend + frontend, one click through)
+
+`render.yaml` at the repo root is a Render Blueprint defining three
+resources: a free Postgres database (`lumina-db`), the Flask API as a web
+service (`lumina-api`), and the React app as a static site
+(`lumina-frontend`). It runs against any branch, not just `main`.
+
+1. In the Render dashboard: **New > Blueprint**, connect this repository,
+   and pick the branch you want deployed (e.g.
+   `claude/repository-code-review-a7hzot`). Render reads `render.yaml` and
+   proposes all three resources — click **Apply**.
+2. `SECRET_KEY`, `JWT_SECRET_KEY`, and `DATABASE_URL` are generated/wired
+   automatically. Two values can't be known until both services exist, so
+   fill them in by hand in the Render dashboard once the first deploy
+   finishes:
+   - `lumina-api` → Environment → `CORS_ORIGINS` = the `lumina-frontend`
+     URL Render assigned (e.g. `https://lumina-frontend.onrender.com`).
+   - `lumina-frontend` → Environment → `REACT_APP_API_BASE_URL` = the
+     `lumina-api` URL Render assigned (e.g.
+     `https://lumina-api.onrender.com`).
+   Redeploy both services after setting these (Manual Deploy → Deploy
+   latest commit) — `CORS_ORIGINS` takes effect on `lumina-api`'s restart,
+   and `REACT_APP_API_BASE_URL` is baked in at `lumina-frontend`'s build
+   time, so both need a fresh deploy, not just a restart.
+3. The API's build step runs `alembic upgrade head` against the fresh
+   database, so the schema is ready but empty. Open the `lumina-api`
+   service's **Shell** tab in Render and run:
+   ```bash
+   flask --app app seed-demo
+   ```
+   This seeds a reverse-engineered Pzena Global Small Cap Focused Value
+   factsheet — real fund data, holdings, performance, a disclosure, a
+   12-component template, and a report already carried through the full
+   workflow to `distributed` — plus four logins to click around with
+   (all `@lumina.test`): `admin`/`admin-pass`, `editor`/`editor-pass`,
+   `compliance`/`compliance-pass`, `client`/`client-pass`.
+4. Open the `lumina-frontend` URL and log in with any of the above.
+
+Both services are on Render's free tier: the API spins down after 15
+minutes idle (the first request after that takes ~30-50s to wake it up),
+and the free Postgres database expires after 30 days unless upgraded.
+
 ## Verification
 
 ```bash

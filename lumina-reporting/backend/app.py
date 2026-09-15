@@ -4,6 +4,7 @@ from flask_cors import CORS
 
 from database import configure_database, db_session, init_db, shutdown_session
 from models import User
+from seed_demo import seed_demo
 from routes.auth import auth_blueprint
 from routes.clients import clients_blueprint
 from routes.dashboard import dashboard_blueprint
@@ -58,6 +59,19 @@ def create_app(test_config=None):
         db_session.add(user)
         db_session.commit()
         click.echo(f'Created {role} user {normalized_email}.')
+
+    @app.cli.command('seed-demo')
+    def seed_demo_command():
+        """Seed a reverse-engineered Pzena factsheet, distributed end-to-end,
+        plus admin/editor/compliance/client demo logins. Safe to re-run."""
+        if seed_demo():
+            click.echo(
+                'Seeded demo data. Logins (all @lumina.test): '
+                'admin/admin-pass, editor/editor-pass, compliance/compliance-pass, '
+                'client/client-pass.'
+            )
+        else:
+            click.echo('Demo data already present -- nothing to do.')
 
     return app
 
