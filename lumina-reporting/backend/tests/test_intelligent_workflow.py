@@ -1,11 +1,19 @@
-REVIEWABLE_COMPONENTS = [
-    {"id": "c1", "type": "text_block", "title": "Disclosures", "review_role": "compliance",
-     "data_binding": {"static_text": "All investments involve risk."}},
-    {"id": "c2", "type": "text_block", "title": "Commentary",
-     "data_binding": {"static_text": "Markets were steady this quarter."}},
+from database import db_session
+from models import WorkflowGroup
+
+PLAIN_COMPONENTS = [
+    {"id": "c1", "type": "text_block", "title": "Commentary", "data_binding": {"static_text": "No review needed."}},
 ]
 
-def _create_template(client, headers, components=REVIEWABLE_COMPONENTS, name='Reviewed Factsheet'):
+def _reviewable_components(group_id):
+    return [
+        {"id": "c1", "type": "text_block", "title": "Disclosures", "review_group_id": group_id,
+         "data_binding": {"static_text": "All investments involve risk."}},
+        {"id": "c2", "type": "text_block", "title": "Commentary",
+         "data_binding": {"static_text": "Markets were steady this quarter."}},
+    ]
+
+def _create_template(client, headers, components=PLAIN_COMPONENTS, name='Reviewed Factsheet'):
     return client.post('/api/templates', headers=headers, json={
         'name': name, 'components': components,
     }).get_json()
@@ -15,19 +23,40 @@ def _create_templated_report(client, headers, sample_client, template_id):
         'title': 'Q2 Report', 'client_id': sample_client, 'template_id': template_id,
     }).get_json()
 
+def _compliance_group_id(app, compliance_headers):
+    # compliance_headers (tests/conftest.py) creates the "Compliance"
+    # WorkflowGroup as a side effect of seeding its editor+group-member user.
+    with app.app_context():
+        return db_session.query(WorkflowGroup).filter_by(name='Compliance').first().id
+
 def test_create_template_rejects_invalid_review_role(client, editor_headers):
     components = [{"id": "c1", "type": "text_block", "title": "Disclosures", "review_role": "viewer",
                    "data_binding": {"static_text": "x"}}]
     response = client.post('/api/templates', headers=editor_headers, json={'name': 'Bad', 'components': components})
     assert response.status_code == 400
 
-def test_create_template_accepts_valid_review_role(client, editor_headers):
-    template = _create_template(client, editor_headers)
-    assert template['components'][0]['review_role'] == 'compliance'
-    assert 'review_role' not in template['components'][1] or template['components'][1].get('review_role') is None
+def test_create_template_rejects_both_review_role_and_review_group_id(client, editor_headers, app, compliance_headers):
+    group_id = _compliance_group_id(app, compliance_headers)
+    components = [{"id": "c1", "type": "text_block", "title": "Disclosures", "review_role": "admin",
+                   "review_group_id": group_id, "data_binding": {"static_text": "x"}}]
+    response = client.post('/api/templates', headers=editor_headers, json={'name': 'Bad', 'components': components})
+    assert response.status_code == 400
 
-def test_review_checklist_only_lists_tagged_components(client, editor_headers, auth_headers, sample_client):
-    template = _create_template(client, editor_headers)
+def test_create_template_rejects_unknown_review_group_id(client, editor_headers):
+    components = [{"id": "c1", "type": "text_block", "title": "Disclosures", "review_group_id": 999999,
+                   "data_binding": {"static_text": "x"}}]
+    response = client.post('/api/templates', headers=editor_headers, json={'name': 'Bad', 'components': components})
+    assert response.status_code == 400
+
+def test_create_template_accepts_valid_review_group_id(client, editor_headers, app, compliance_headers):
+    group_id = _compliance_group_id(app, compliance_headers)
+    template = _create_template(client, editor_headers, components=_reviewable_components(group_id))
+    assert template['components'][0]['review_group_id'] == group_id
+    assert 'review_group_id' not in template['components'][1] or template['components'][1].get('review_group_id') is None
+
+def test_review_checklist_only_lists_tagged_components(client, editor_headers, auth_headers, app, compliance_headers, sample_client):
+    group_id = _compliance_group_id(app, compliance_headers)
+    template = _create_template(client, editor_headers, components=_reviewable_components(group_id))
     report = _create_templated_report(client, auth_headers, sample_client, template['id'])
 
     response = client.get(f"/api/reports/{report['id']}/review-checklist", headers=auth_headers)
@@ -35,7 +64,7 @@ def test_review_checklist_only_lists_tagged_components(client, editor_headers, a
     checklist = response.get_json()
     assert len(checklist) == 1
     assert checklist[0]['component_id'] == 'c1'
-    assert checklist[0]['review_role'] == 'compliance'
+    assert checklist[0]['review_group_id'] == group_id
     assert checklist[0]['reviewed'] is False
 
 def test_review_checklist_empty_for_legacy_report(client, auth_headers, sample_client):
@@ -46,18 +75,20 @@ def test_review_checklist_empty_for_legacy_report(client, auth_headers, sample_c
     assert response.status_code == 200
     assert response.get_json() == []
 
-def test_mark_component_reviewed_requires_matching_role(client, editor_headers, auth_headers, sample_client):
-    template = _create_template(client, editor_headers)
+def test_mark_component_reviewed_requires_group_membership(client, editor_headers, auth_headers, app, compliance_headers, sample_client):
+    group_id = _compliance_group_id(app, compliance_headers)
+    template = _create_template(client, editor_headers, components=_reviewable_components(group_id))
     report = _create_templated_report(client, auth_headers, sample_client, template['id'])
 
-    # editor is not 'compliance' and not 'admin' -> forbidden
+    # editor is not a member of the Compliance group and not admin -> forbidden
     denied = client.post(
         f"/api/reports/{report['id']}/components/c1/review", headers=editor_headers,
     )
     assert denied.status_code == 403
 
-def test_mark_component_reviewed_by_required_role(client, editor_headers, auth_headers, compliance_headers, sample_client):
-    template = _create_template(client, editor_headers)
+def test_mark_component_reviewed_by_group_member(client, editor_headers, auth_headers, compliance_headers, app, sample_client):
+    group_id = _compliance_group_id(app, compliance_headers)
+    template = _create_template(client, editor_headers, components=_reviewable_components(group_id))
     report = _create_templated_report(client, auth_headers, sample_client, template['id'])
 
     response = client.post(
@@ -71,23 +102,26 @@ def test_mark_component_reviewed_by_required_role(client, editor_headers, auth_h
     checklist = client.get(f"/api/reports/{report['id']}/review-checklist", headers=auth_headers).get_json()
     assert checklist[0]['reviewed'] is True
 
-def test_mark_component_reviewed_by_admin_override(client, editor_headers, auth_headers, sample_client):
-    template = _create_template(client, editor_headers)
+def test_mark_component_reviewed_by_admin_override(client, editor_headers, auth_headers, app, compliance_headers, sample_client):
+    group_id = _compliance_group_id(app, compliance_headers)
+    template = _create_template(client, editor_headers, components=_reviewable_components(group_id))
     report = _create_templated_report(client, auth_headers, sample_client, template['id'])
 
     response = client.post(f"/api/reports/{report['id']}/components/c1/review", headers=auth_headers)
     assert response.status_code == 200
 
-def test_mark_component_reviewed_rejects_unknown_component(client, editor_headers, auth_headers, sample_client):
-    template = _create_template(client, editor_headers)
+def test_mark_component_reviewed_rejects_unknown_component(client, editor_headers, auth_headers, app, compliance_headers, sample_client):
+    group_id = _compliance_group_id(app, compliance_headers)
+    template = _create_template(client, editor_headers, components=_reviewable_components(group_id))
     report = _create_templated_report(client, auth_headers, sample_client, template['id'])
 
-    # c2 has no review_role -> not reviewable
+    # c2 has no review_group_id -> not reviewable
     response = client.post(f"/api/reports/{report['id']}/components/c2/review", headers=auth_headers)
     assert response.status_code == 404
 
-def test_clear_component_review(client, editor_headers, auth_headers, compliance_headers, sample_client):
-    template = _create_template(client, editor_headers)
+def test_clear_component_review(client, editor_headers, auth_headers, compliance_headers, app, sample_client):
+    group_id = _compliance_group_id(app, compliance_headers)
+    template = _create_template(client, editor_headers, components=_reviewable_components(group_id))
     report = _create_templated_report(client, auth_headers, sample_client, template['id'])
 
     client.post(f"/api/reports/{report['id']}/components/c1/review", headers=compliance_headers)

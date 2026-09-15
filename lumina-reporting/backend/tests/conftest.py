@@ -12,7 +12,7 @@ import json
 
 from app import create_app
 from database import db_session
-from models import Client, FundData, Holding, PerformanceSnapshot, ReportTemplate, User
+from models import Client, FundData, Holding, PerformanceSnapshot, ReportTemplate, User, WorkflowGroup, WorkflowGroupMembership
 
 @pytest.fixture()
 def app(tmp_path):
@@ -62,12 +62,35 @@ def viewer_headers(app, client):
 
 @pytest.fixture()
 def compliance_headers(app, client):
+    # 'compliance' is a workflow group now, not a system role -- this is an
+    # ordinary editor who's a member of a "Compliance" WorkflowGroup, the
+    # same shape `flask migrate-workflow-diagrams` produces for a
+    # pre-existing role='compliance' user. Repurposed rather than renamed:
+    # dozens of existing tests reference this fixture as "the actor who
+    # certifies compliance steps," and that intent is unchanged.
     with app.app_context():
-        user = User(email='compliance@example.com', role='compliance')
+        group = db_session.query(WorkflowGroup).filter_by(name='Compliance').first()
+        if not group:
+            group = WorkflowGroup(name='Compliance', created_by=1)
+            db_session.add(group)
+            db_session.commit()
+        user = User(email='compliance@example.com', role='editor')
         user.set_password('compliance-password')
         db_session.add(user)
         db_session.commit()
+        db_session.add(WorkflowGroupMembership(user_id=user.id, group_id=group.id))
+        db_session.commit()
     return _login_headers(client, 'compliance@example.com', 'compliance-password')
+
+@pytest.fixture()
+def workflow_group(app):
+    """A generic reusable WorkflowGroup for tests that just need *a* group to
+    exist, distinct from the "Compliance" one compliance_headers seeds."""
+    with app.app_context():
+        group = WorkflowGroup(name='Portfolio Managers', created_by=1)
+        db_session.add(group)
+        db_session.commit()
+        return group.id
 
 @pytest.fixture()
 def sample_client(app):

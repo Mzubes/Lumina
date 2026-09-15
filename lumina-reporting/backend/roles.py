@@ -4,10 +4,9 @@
 # ordinary, optional, firm-created workflow group like any other, so a firm
 # without a formal compliance function isn't forced to have one.
 #
-# Not yet wired into app.py's CLI / routes/users.py's VALID_ROLES / the test
-# fixtures -- those still accept the legacy 'compliance' role until the
-# `flask migrate-workflow-diagrams` rollout command (which rewrites existing
-# role='compliance' users to 'editor' + Compliance-group membership) has run,
-# so an existing compliance user can't be locked out of an unrelated profile
-# edit mid-rollout by a vocabulary that no longer accepts their current role.
+# A deployment upgrading from before this change must run
+# `flask migrate-workflow-diagrams` (which rewrites any existing
+# role='compliance' users to 'editor' + Compliance-group membership) before
+# or immediately after picking up this code, so no user is left with a role
+# this vocabulary no longer accepts.
 SYSTEM_ROLES = {'admin', 'editor', 'viewer', 'client'}

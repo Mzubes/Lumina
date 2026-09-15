@@ -4,7 +4,7 @@ import json
 from database import db_session
 from models import (
     Client, Contact, Disclosure, FundData, Holding, PerformanceSnapshot,
-    Report, ReportTemplate, TemplateClientAssignment, User,
+    Report, ReportTemplate, TemplateClientAssignment, User, WorkflowGroup, WorkflowGroupMembership,
 )
 from renderers import RENDERERS
 from report_content import resolve_report_content
@@ -188,7 +188,17 @@ def seed_demo():
 
     admin = _get_or_create_user('admin@lumina.test', 'admin-pass', 'admin')
     _get_or_create_user('editor@lumina.test', 'editor-pass', 'editor')
-    compliance = _get_or_create_user('compliance@lumina.test', 'compliance-pass', 'compliance')
+    # 'compliance' is a workflow group, not a system role -- this demo login
+    # is an ordinary editor who's a member of the (seeded) Compliance group.
+    compliance_group = db_session.query(WorkflowGroup).filter_by(name='Compliance').first()
+    if not compliance_group:
+        compliance_group = WorkflowGroup(name='Compliance', description='Final regulatory sign-off.', created_by=admin.id)
+        db_session.add(compliance_group)
+        db_session.commit()
+    compliance = _get_or_create_user('compliance@lumina.test', 'compliance-pass', 'editor')
+    if not db_session.query(WorkflowGroupMembership).filter_by(user_id=compliance.id, group_id=compliance_group.id).first():
+        db_session.add(WorkflowGroupMembership(user_id=compliance.id, group_id=compliance_group.id))
+        db_session.commit()
 
     client = db_session.query(Client).filter_by(name='Meridian Pension Partners').first()
     if not client:
@@ -263,7 +273,8 @@ def seed_demo():
             CALENDAR_YEAR_RETURNS_ROWS,
         ),
         {
-            'id': 'commentary', 'type': 'text_block', 'title': 'Portfolio Commentary', 'review_role': 'compliance',
+            'id': 'commentary', 'type': 'text_block', 'title': 'Portfolio Commentary',
+            'review_group_id': compliance_group.id,
             'data_binding': {'static_text': PORTFOLIO_COMMENTARY},
         },
     ]

@@ -4,12 +4,13 @@ import json
 from flask import Blueprint, g, jsonify, request
 
 from database import db_session
-from models import Client, Disclosure, Report, ReportTemplate, TemplateClientAssignment
+from models import Client, Disclosure, Report, ReportTemplate, TemplateClientAssignment, WorkflowGroup
 from renderers import RENDERERS
 from report_content import resolve_report_content
 from routes.auth import require_auth
 from routes.reports import _save_pdf_bytes
 from template_components import validate_components
+import workflow_engine
 
 templates_blueprint = Blueprint('templates', __name__)
 
@@ -24,6 +25,15 @@ def _validate_disclosure_ids(disclosure_ids):
     found = db_session.query(Disclosure.id).filter(Disclosure.id.in_(disclosure_ids)).all()
     if len(found) != len(set(disclosure_ids)):
         return 'one or more disclosure_ids are unknown'
+    return None
+
+def _validate_review_group_ids(components):
+    group_ids = {c['review_group_id'] for c in components if c.get('review_group_id') is not None}
+    if not group_ids:
+        return None
+    found = db_session.query(WorkflowGroup.id).filter(WorkflowGroup.id.in_(group_ids)).all()
+    if len(found) != len(group_ids):
+        return 'one or more component review_group_id values are unknown'
     return None
 
 @templates_blueprint.get('/api/templates')
@@ -49,7 +59,7 @@ def create_template():
     disclosure_ids = data.get('disclosure_ids')
     if not name:
         return jsonify({'message': 'name is required'}), 400
-    error = validate_components(components) or _validate_disclosure_ids(disclosure_ids)
+    error = validate_components(components) or _validate_disclosure_ids(disclosure_ids) or _validate_review_group_ids(components)
     if error:
         return jsonify({'message': error}), 400
 
@@ -80,7 +90,7 @@ def update_template(template_id):
     disclosure_ids = data.get('disclosure_ids', template.disclosure_ids_list())
     if not name:
         return jsonify({'message': 'name is required'}), 400
-    error = validate_components(components) or _validate_disclosure_ids(disclosure_ids)
+    error = validate_components(components) or _validate_disclosure_ids(disclosure_ids) or _validate_review_group_ids(components)
     if error:
         return jsonify({'message': error}), 400
 
@@ -178,6 +188,7 @@ def approve_template(template_id):
         )
         db_session.add(report)
         db_session.commit()
+        workflow_engine.pin_to_active_diagram(report, template.id, g.current_user['user_id'])
         content = resolve_report_content(report, template)
         report.file_path = _save_pdf_bytes(RENDERERS['pdf'](content), report.id)
         db_session.commit()

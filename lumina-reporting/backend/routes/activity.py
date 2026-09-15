@@ -78,7 +78,7 @@ def _distribution_link_events(per_type_limit):
     ]
 
 @activity_blueprint.get('/api/activity')
-@require_auth(roles=['admin', 'editor', 'viewer', 'compliance'])
+@require_auth(roles=['admin', 'editor', 'viewer'])
 def get_activity():
     limit = request.args.get('limit', DEFAULT_LIMIT, type=int)
     limit = max(1, min(limit, MAX_LIMIT))

@@ -6,7 +6,7 @@ from flask import Blueprint, Response, g, jsonify, request
 
 from database import db_session
 from logs import log_action
-from models import Client, ComponentReview, Contact, DistributionLink, FundData, Report, ReportTemplate, ReportTransition, User
+from models import Client, ComponentReview, Contact, DistributionLink, FundData, Report, ReportTemplate, ReportTransition, User, WorkflowGroup
 from renderers import CONTENT_TYPES, RENDERERS
 from report_content import resolve_report_content, reviewable_components
 from report_generator import generate_pdf
@@ -47,17 +47,22 @@ def _save_pdf_bytes(pdf_bytes, report_id):
     return f"/static/reports/{filename.name}"
 
 def _serialize_report(report):
-    # Every endpoint returning a single Report carries this -- the frontend's
+    # Every endpoint returning a Report carries this -- the frontend's
     # workflow stepper needs it to render the Compliance step correctly
     # (done/current/skipped) after every action, not just on initial load.
     payload = report.serialize()
     payload['complianceRequired'] = requires_compliance(report)
     # Empty for a legacy (non-diagram) report -- the frontend falls back to
-    # the plain status string for those until it's migrated to render this.
-    payload['activeSteps'] = (
-        [instance.serialize() for instance in workflow_engine.active_instances(report)]
-        if report.workflow_diagram_id is not None else []
-    )
+    # ACTIONS_BY_STATUS/the plain status string for those until it's
+    # migrated to render this instead.
+    if report.workflow_diagram_id is not None:
+        payload['activeSteps'] = [instance.serialize() for instance in workflow_engine.active_instances(report)]
+        payload['eligibleActions'] = workflow_engine.eligible_actions(
+            report, g.current_user.get('role'), g.current_user.get('user_id'),
+        )
+    else:
+        payload['activeSteps'] = []
+        payload['eligibleActions'] = []
     return payload
 
 @reports_blueprint.get('/api/reports')
@@ -86,7 +91,7 @@ def list_reports():
     reports = query.order_by(Report.created_at.desc()).all()
     if g.current_user.get('role') == 'client':
         reports = [r for r in reports if workflow_engine.report_is_distributed(r)]
-    return jsonify([report.serialize() for report in reports])
+    return jsonify([_serialize_report(report) for report in reports])
 
 @reports_blueprint.get('/api/reports/facets')
 @require_auth(roles=['admin', 'editor', 'viewer'])
@@ -111,7 +116,7 @@ def get_report(report_id):
     return jsonify(_serialize_report(report))
 
 @reports_blueprint.get('/api/reports/<int:report_id>/history')
-@require_auth(roles=['admin', 'editor', 'viewer', 'compliance'])
+@require_auth(roles=['admin', 'editor', 'viewer'])
 def get_report_history(report_id):
     report = _get_scoped_report(report_id)
     if not report:
@@ -163,6 +168,7 @@ def create_report():
     db_session.commit()
 
     if template:
+        workflow_engine.pin_to_active_diagram(report, template.id, g.current_user['user_id'])
         content = resolve_report_content(report, template)
         report.file_path = _save_pdf_bytes(RENDERERS['pdf'](content), report.id)
     else:
@@ -236,7 +242,15 @@ _LEGACY_ACTION_LABELS = {
 }
 
 def _transition_route(action, roles):
-    @require_auth(roles=roles)
+    # Auth is deliberately NOT gated by `roles` at the decorator level
+    # anymore: once a report has a workflow_diagram_id, who's allowed to
+    # act is determined by the engine (system role + workflow group
+    # membership on the report's current step), not a fixed per-verb role
+    # list -- a compliance user migrated to role='editor' + "Compliance"
+    # group membership must still be able to certify a migrated report
+    # through this same URL. The legacy branch below re-checks `roles`
+    # itself, so a non-diagram report's authorization is unchanged.
+    @require_auth()
     def handler(report_id):
         report = _get_scoped_report(report_id)
         if not report:
@@ -266,6 +280,11 @@ def _transition_route(action, roles):
                 return jsonify({'message': str(error)}), 403
             return jsonify(_serialize_report(report))
 
+        # Legacy (non-diagram) report: the original per-verb role check,
+        # just moved from the decorator into the handler so it runs
+        # alongside (not instead of) the diagram-aware branch above.
+        if g.current_user.get('role') not in roles:
+            return jsonify({'message': 'Insufficient permissions'}), 403
         try:
             apply_transition(report, action, g.current_user['user_id'], note=note)
         except InvalidTransition as error:
@@ -299,7 +318,7 @@ reports_blueprint.add_url_rule(
 )
 
 @reports_blueprint.get('/api/reports/<int:report_id>/eligible-actions')
-@require_auth(roles=['admin', 'editor', 'viewer', 'compliance'])
+@require_auth(roles=['admin', 'editor', 'viewer'])
 def get_eligible_actions(report_id):
     """What the caller can currently do on this report, per its diagram --
     empty for a legacy (non-diagram) report. Powers action-button rendering
@@ -311,7 +330,7 @@ def get_eligible_actions(report_id):
     return jsonify(workflow_engine.eligible_actions(report, role, g.current_user['user_id']))
 
 @reports_blueprint.post('/api/reports/<int:report_id>/transition')
-@require_auth(roles=['admin', 'editor', 'viewer', 'compliance'])
+@require_auth(roles=['admin', 'editor', 'viewer'])
 def transition_report(report_id):
     """The generic replacement for the six legacy verb routes above -- fires
     a specific diagram edge by id. 409s (not a valid transition) for a
@@ -332,7 +351,7 @@ def transition_report(report_id):
     return jsonify(_serialize_report(report))
 
 @reports_blueprint.get('/api/reports/<int:report_id>/distribution-links')
-@require_auth(roles=['admin', 'editor', 'viewer', 'compliance'])
+@require_auth(roles=['admin', 'editor', 'viewer'])
 def list_distribution_links(report_id):
     report = _get_scoped_report(report_id)
     if not report:
@@ -386,8 +405,19 @@ def revoke_distribution_link(report_id, link_id):
         db_session.commit()
     return jsonify(link.serialize())
 
+def _may_review_component(component, user_role, user_id):
+    if user_role == 'admin':
+        return True
+    review_role = component.get('review_role')
+    if review_role:
+        return user_role == review_role
+    review_group_id = component.get('review_group_id')
+    if review_group_id is not None:
+        return review_group_id in workflow_engine.group_ids_for_user(user_id)
+    return False
+
 @reports_blueprint.get('/api/reports/<int:report_id>/review-checklist')
-@require_auth(roles=['admin', 'editor', 'viewer', 'compliance'])
+@require_auth(roles=['admin', 'editor', 'viewer'])
 def get_review_checklist(report_id):
     report = _get_scoped_report(report_id)
     if not report:
@@ -403,7 +433,8 @@ def get_review_checklist(report_id):
         checklist.append({
             'component_id': component['id'],
             'title': component.get('title'),
-            'review_role': component['review_role'],
+            'review_role': component.get('review_role'),
+            'review_group_id': component.get('review_group_id'),
             'reviewed': review is not None,
             'reviewed_by': review.reviewed_by if review else None,
             'reviewed_at': review.reviewed_at.isoformat() if review and review.reviewed_at else None,
@@ -412,7 +443,7 @@ def get_review_checklist(report_id):
     return jsonify(checklist)
 
 @reports_blueprint.post('/api/reports/<int:report_id>/components/<component_id>/review')
-@require_auth(roles=['admin', 'editor', 'compliance'])
+@require_auth(roles=['admin', 'editor', 'viewer'])
 def mark_component_reviewed(report_id, component_id):
     report = _get_scoped_report(report_id)
     if not report:
@@ -421,9 +452,8 @@ def mark_component_reviewed(report_id, component_id):
     if not component:
         return jsonify({'message': 'Unknown or non-reviewable component_id'}), 404
 
-    user_role = g.current_user.get('role')
-    if user_role != 'admin' and user_role != component['review_role']:
-        return jsonify({'message': f"Only {component['review_role']} or admin can review this component"}), 403
+    if not _may_review_component(component, g.current_user.get('role'), g.current_user['user_id']):
+        return jsonify({'message': 'Not eligible to review this component'}), 403
 
     data = request.get_json(silent=True) or {}
     review = db_session.query(ComponentReview).filter_by(report_id=report.id, component_id=component_id).first()
@@ -437,7 +467,7 @@ def mark_component_reviewed(report_id, component_id):
     return jsonify(review.serialize())
 
 @reports_blueprint.delete('/api/reports/<int:report_id>/components/<component_id>/review')
-@require_auth(roles=['admin', 'editor', 'compliance'])
+@require_auth(roles=['admin', 'editor', 'viewer'])
 def clear_component_review(report_id, component_id):
     report = _get_scoped_report(report_id)
     if not report:
@@ -446,9 +476,8 @@ def clear_component_review(report_id, component_id):
     if not component:
         return jsonify({'message': 'Unknown or non-reviewable component_id'}), 404
 
-    user_role = g.current_user.get('role')
-    if user_role != 'admin' and user_role != component['review_role']:
-        return jsonify({'message': f"Only {component['review_role']} or admin can review this component"}), 403
+    if not _may_review_component(component, g.current_user.get('role'), g.current_user['user_id']):
+        return jsonify({'message': 'Not eligible to review this component'}), 403
 
     review = db_session.query(ComponentReview).filter_by(report_id=report.id, component_id=component_id).first()
     if not review:
@@ -457,36 +486,55 @@ def clear_component_review(report_id, component_id):
     db_session.commit()
     return '', 204
 
+def _is_in_flight(report):
+    if report.workflow_diagram_id is None:
+        return report.status in ('review', 'compliance')
+    return workflow_engine.is_in_flight(report)
+
 @reports_blueprint.get('/api/reports/my-queue')
-@require_auth(roles=['admin', 'editor', 'compliance'])
+@require_auth(roles=['admin', 'editor', 'viewer'])
 def get_my_queue():
     """Everything actionable by the caller, in one place, each with why it's
-    there -- merges the old separate Approvals/Compliance queues with
-    pending component reviews (previously only a dashboard count, never a
-    list). A report needing more than one thing appears once with multiple
-    reasons, not once per reason."""
+    there -- merges workflow actions (approvals, certifications, or any
+    diagram edge the caller is eligible to fire) with pending component
+    reviews. A report needing more than one thing appears once with
+    multiple reasons, not once per reason.
+
+    Diagram-backed reports are queried generically through the engine's own
+    eligibility check. Legacy (non-diagram) reports keep the original fixed
+    draft/review/compliance/approved/distributed queue, with the compliance
+    step now keyed off membership in the 'Compliance' workflow group --
+    the exact group `flask migrate-workflow-diagrams` creates for former
+    role='compliance' users -- instead of a hardcoded role."""
     role = g.current_user.get('role')
+    user_id = g.current_user['user_id']
     queue = {}
 
     def add_reason(report, **reason):
         entry = queue.setdefault(report.id, {'report': report, 'reasons': []})
         entry['reasons'].append(reason)
 
+    for report in db_session.query(Report).filter(Report.workflow_diagram_id.isnot(None)).all():
+        actions = workflow_engine.eligible_actions(report, role, user_id)
+        if actions:
+            labels = ', '.join(sorted({action['label'] for action in actions}))
+            add_reason(report, type='action', label=f'Needs action: {labels}')
+
     if role == 'admin':
-        for report in db_session.query(Report).filter_by(status='review').all():
+        for report in db_session.query(Report).filter_by(status='review', workflow_diagram_id=None).all():
             add_reason(report, type='approval', label='Needs your approval')
-    if role == 'compliance':
-        for report in db_session.query(Report).filter_by(status='compliance').all():
+
+    compliance_group = db_session.query(WorkflowGroup).filter_by(name='Compliance').first()
+    if compliance_group and compliance_group.id in workflow_engine.group_ids_for_user(user_id):
+        for report in db_session.query(Report).filter_by(status='compliance', workflow_diagram_id=None).all():
             add_reason(report, type='compliance', label='Needs your compliance certification')
 
-    # Same in-flight scoping as dashboard.py's _pending_component_reviews().
-    in_flight = (
-        db_session.query(Report)
-        .filter(Report.template_id.isnot(None), Report.status.in_(['review', 'compliance']))
-        .all()
-    )
+    in_flight = [
+        report for report in db_session.query(Report).filter(Report.template_id.isnot(None)).all()
+        if _is_in_flight(report)
+    ]
     for report in in_flight:
-        mine = [c for c in reviewable_components(report) if role == 'admin' or c['review_role'] == role]
+        mine = [c for c in reviewable_components(report) if _may_review_component(c, role, user_id)]
         if not mine:
             continue
         reviewed_ids = {
@@ -503,4 +551,4 @@ def get_my_queue():
             )
 
     entries = sorted(queue.values(), key=lambda entry: entry['report'].created_at or datetime.datetime.min, reverse=True)
-    return jsonify([{**entry['report'].serialize(), 'reasons': entry['reasons']} for entry in entries])
+    return jsonify([{**_serialize_report(entry['report']), 'reasons': entry['reasons']} for entry in entries])

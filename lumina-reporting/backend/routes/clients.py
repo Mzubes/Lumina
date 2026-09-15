@@ -13,13 +13,13 @@ def _get_contact_or_404(client_id, contact_id):
     return db_session.query(Contact).filter_by(id=contact_id, client_id=client_id).first()
 
 @clients_blueprint.get('/api/clients')
-@require_auth(roles=['admin', 'editor', 'viewer', 'compliance'])
+@require_auth(roles=['admin', 'editor', 'viewer'])
 def list_clients():
     clients = db_session.query(Client).order_by(Client.name.asc()).all()
     return jsonify([client.serialize() for client in clients])
 
 @clients_blueprint.get('/api/clients/<int:client_id>')
-@require_auth(roles=['admin', 'editor', 'viewer', 'compliance'])
+@require_auth(roles=['admin', 'editor', 'viewer'])
 def get_client(client_id):
     client = _get_client_or_404(client_id)
     if not client:
@@ -77,7 +77,7 @@ def delete_client(client_id):
     return '', 204
 
 @clients_blueprint.get('/api/clients/<int:client_id>/contacts')
-@require_auth(roles=['admin', 'editor', 'viewer', 'compliance'])
+@require_auth(roles=['admin', 'editor', 'viewer'])
 def list_contacts(client_id):
     if not _get_client_or_404(client_id):
         return jsonify({'message': 'Client not found'}), 404

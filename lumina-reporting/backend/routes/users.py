@@ -3,14 +3,12 @@ from sqlalchemy.exc import IntegrityError
 
 from database import db_session
 from models import Client, User
+from roles import SYSTEM_ROLES
 from routes.auth import require_auth
 
 users_blueprint = Blueprint('users', __name__)
 
-# Mirrors the role vocabulary app.py's `create-user` CLI command already
-# enforces -- the only other place this was validated before this route
-# existed.
-VALID_ROLES = {'admin', 'editor', 'viewer', 'compliance', 'client'}
+VALID_ROLES = SYSTEM_ROLES
 MIN_PASSWORD_LENGTH = 8
 
 def _get_user_or_404(user_id):

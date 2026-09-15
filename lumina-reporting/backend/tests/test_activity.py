@@ -1,14 +1,24 @@
-REVIEWABLE_COMPONENTS = [
-    {"id": "c1", "type": "text_block", "title": "Disclosures", "review_role": "compliance",
-     "data_binding": {"static_text": "All investments involve risk."}},
-]
+from database import db_session
+from models import WorkflowGroup
+
+def _reviewable_components(group_id):
+    return [
+        {"id": "c1", "type": "text_block", "title": "Disclosures", "review_group_id": group_id,
+         "data_binding": {"static_text": "All investments involve risk."}},
+    ]
 
 PLAIN_COMPONENTS = [
     {"id": "c1", "type": "text_block", "title": "Commentary",
-     "data_binding": {"static_text": "No review_role here."}},
+     "data_binding": {"static_text": "No review tag here."}},
 ]
 
-def _create_template(client, editor_headers, components=REVIEWABLE_COMPONENTS):
+def _compliance_group_id(app, compliance_headers):
+    # compliance_headers (tests/conftest.py) creates the "Compliance"
+    # WorkflowGroup as a side effect of seeding its editor+group-member user.
+    with app.app_context():
+        return db_session.query(WorkflowGroup).filter_by(name='Compliance').first().id
+
+def _create_template(client, editor_headers, components=PLAIN_COMPONENTS):
     return client.post('/api/templates', headers=editor_headers, json={
         'name': 'Activity Template', 'components': components,
     }).get_json()
@@ -35,8 +45,9 @@ def test_activity_includes_transition_events(client, editor_headers, auth_header
     assert transitions[0]['actor_email'] == 'admin@example.com'
     assert transitions[0]['report_title'] == 'Activity Report'
 
-def test_activity_includes_component_review_events(client, editor_headers, auth_headers, compliance_headers, sample_client):
-    template = _create_template(client, editor_headers)
+def test_activity_includes_component_review_events(client, editor_headers, auth_headers, compliance_headers, app, sample_client):
+    group_id = _compliance_group_id(app, compliance_headers)
+    template = _create_template(client, editor_headers, components=_reviewable_components(group_id))
     report = _create_templated_report(client, auth_headers, sample_client, template['id'], report_type='factsheet')
     client.post(f"/api/reports/{report['id']}/submit", headers=auth_headers)
     client.post(f"/api/reports/{report['id']}/approve", headers=auth_headers)

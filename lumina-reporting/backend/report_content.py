@@ -156,14 +156,15 @@ def _resolve_disclosures(template):
     ]
 
 def reviewable_components(report):
-    """The report's own template components that carry a review_role -- []
-    for legacy (template-less) reports, which have nothing to review."""
+    """The report's own template components that carry a review_role or
+    review_group_id -- [] for legacy (template-less) reports, which have
+    nothing to review."""
     if not report.template_id:
         return []
     template = db_session.query(ReportTemplate).filter_by(id=report.template_id).first()
     if not template:
         return []
-    return [c for c in template.components_list() if c.get('review_role')]
+    return [c for c in template.components_list() if c.get('review_role') or c.get('review_group_id') is not None]
 
 def resolve_report_content(report, template):
     client = db_session.query(Client).filter_by(id=report.client_id).first()

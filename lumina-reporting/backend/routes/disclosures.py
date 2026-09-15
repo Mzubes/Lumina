@@ -24,7 +24,7 @@ def get_disclosure(disclosure_id):
     return jsonify(disclosure.serialize())
 
 @disclosures_blueprint.post('/api/disclosures')
-@require_auth(roles=['admin', 'editor', 'compliance'])
+@require_auth(roles=['admin', 'editor'])
 def create_disclosure():
     data = request.get_json(silent=True) or {}
     title = data.get('title')
@@ -41,7 +41,7 @@ def create_disclosure():
     return jsonify(disclosure.serialize()), 201
 
 @disclosures_blueprint.put('/api/disclosures/<int:disclosure_id>')
-@require_auth(roles=['admin', 'editor', 'compliance'])
+@require_auth(roles=['admin', 'editor'])
 def update_disclosure(disclosure_id):
     disclosure = _get_disclosure_or_404(disclosure_id)
     if not disclosure:
@@ -60,7 +60,7 @@ def update_disclosure(disclosure_id):
     return jsonify(disclosure.serialize())
 
 @disclosures_blueprint.delete('/api/disclosures/<int:disclosure_id>')
-@require_auth(roles=['admin', 'editor', 'compliance'])
+@require_auth(roles=['admin', 'editor'])
 def delete_disclosure(disclosure_id):
     disclosure = _get_disclosure_or_404(disclosure_id)
     if not disclosure:

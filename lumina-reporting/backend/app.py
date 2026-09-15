@@ -3,7 +3,9 @@ from flask import Flask, jsonify
 from flask_cors import CORS
 
 from database import configure_database, db_session, init_db, shutdown_session
-from models import User
+from migrate_workflow_diagrams import migrate_workflow_diagrams
+from models import User, WorkflowGroup, WorkflowGroupMembership
+from roles import SYSTEM_ROLES
 from seed_demo import seed_demo
 from routes.activity import activity_blueprint
 from routes.auth import auth_blueprint
@@ -55,10 +57,14 @@ def create_app(test_config=None):
 
     @app.cli.command('create-user')
     @click.option('--email', prompt=True)
-    @click.option('--role', type=click.Choice(['admin', 'editor', 'viewer', 'client', 'compliance']), default='admin')
+    @click.option('--role', type=click.Choice(sorted(SYSTEM_ROLES)), default='admin')
     @click.option('--client-id', type=int, default=None, help="Required when --role client.")
+    @click.option(
+        '--group', 'group_names', multiple=True,
+        help="Workflow group to add this user to (repeatable). Created if it doesn't already exist.",
+    )
     @click.password_option()
-    def create_user(email, role, client_id, password):
+    def create_user(email, role, client_id, group_names, password):
         normalized_email = email.strip().lower()
         if role == 'client' and client_id is None:
             raise click.ClickException('--client-id is required when --role client.')
@@ -67,8 +73,17 @@ def create_app(test_config=None):
         user = User(email=normalized_email, client_id=client_id, role=role)
         user.set_password(password)
         db_session.add(user)
+        db_session.flush()
+        for name in group_names:
+            group = db_session.query(WorkflowGroup).filter_by(name=name).first()
+            if not group:
+                group = WorkflowGroup(name=name, created_by=user.id)
+                db_session.add(group)
+                db_session.flush()
+            db_session.add(WorkflowGroupMembership(user_id=user.id, group_id=group.id))
         db_session.commit()
-        click.echo(f'Created {role} user {normalized_email}.')
+        group_note = f" (groups: {', '.join(group_names)})" if group_names else ''
+        click.echo(f'Created {role} user {normalized_email}{group_note}.')
 
     @app.cli.command('seed-demo')
     def seed_demo_command():
@@ -82,6 +97,24 @@ def create_app(test_config=None):
             )
         else:
             click.echo('Demo data already present -- nothing to do.')
+
+    @app.cli.command('migrate-workflow-diagrams')
+    @click.option('--dry-run', is_flag=True, default=False, help='Report what would change without committing.')
+    def migrate_workflow_diagrams_command(dry_run):
+        """One-off rollout command: generates an auto-equivalent workflow
+        diagram for every existing template that doesn't already have one,
+        migrates any role='compliance' users to a 'Compliance' workflow
+        group + role='editor', and pins existing reports to their
+        template's new diagram. Safe to re-run -- a template that already
+        has an active diagram is left untouched."""
+        summary = migrate_workflow_diagrams(dry_run=dry_run)
+        prefix = '[dry run] ' if dry_run else ''
+        click.echo(
+            f"{prefix}Migrated {summary['compliance_users_migrated']} compliance user(s), "
+            f"rewrote {summary['components_rewritten']} component review reference(s), "
+            f"generated diagrams for {summary['templates_migrated']} template(s), "
+            f"backfilled {summary['reports_backfilled']} report(s)."
+        )
 
     return app
 

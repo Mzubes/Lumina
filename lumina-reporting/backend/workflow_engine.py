@@ -43,6 +43,11 @@ def _group_ids_for(user_id):
     rows = db_session.query(WorkflowGroupMembership.group_id).filter_by(user_id=user_id).all()
     return {row[0] for row in rows}
 
+# Public alias -- other modules (e.g. component-level review eligibility in
+# routes/reports.py) need this same lookup outside the transition-engine
+# internals above.
+group_ids_for_user = _group_ids_for
+
 def _may_act(role, group_ids, node):
     if role == 'admin':
         return True
@@ -176,6 +181,18 @@ def start_report(report, diagram, actor_id):
     db_session.commit()
     return report
 
+def pin_to_active_diagram(report, template_id, actor_id):
+    """Called once, right after a new templated Report row is created --
+    pins it to that template's current active diagram (if one exists) and
+    seeds its initial step instance. A template with no diagram yet (not
+    migrated, not hand-authored) leaves the new report on the legacy engine,
+    exactly as it would have behaved before this feature existed."""
+    diagram = db_session.query(WorkflowDiagram).filter_by(template_id=template_id, is_active=True).first()
+    if diagram is None:
+        return
+    report.workflow_diagram_id = diagram.id
+    start_report(report, diagram, actor_id)
+
 def apply_transition(report, edge_id, actor_id, note=None):
     diagram = get_diagram(report)
     if diagram is None:
@@ -225,6 +242,19 @@ def is_distribution_gate_reached(report):
     nodes_by_id, _ = _index(diagram)
     return any(
         nodes_by_id.get(instance.node_id, {}).get('is_distribution_gate')
+        for instance in active_instances(report)
+    )
+
+def is_in_flight(report):
+    """True while a diagram-backed report hasn't yet reached a terminal
+    resting state -- the generic replacement for a status-string membership
+    check like `status in ('review', 'compliance')`."""
+    diagram = get_diagram(report)
+    if diagram is None:
+        return False
+    nodes_by_id, _ = _index(diagram)
+    return not any(
+        nodes_by_id.get(instance.node_id, {}).get('type') == 'terminal'
         for instance in active_instances(report)
     )
 
