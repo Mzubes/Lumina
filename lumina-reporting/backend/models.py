@@ -24,6 +24,11 @@ class User(Base):
     def check_password(self, password):
         return check_password_hash(self.password_hash, password)
 
+    def serialize(self):
+        # Never include password_hash -- this is the only field withheld
+        # from an otherwise-complete serialization.
+        return {"id": self.id, "email": self.email, "role": self.role, "client_id": self.client_id}
+
 @event.listens_for(User, 'before_insert')
 @event.listens_for(User, 'before_update')
 def _validate_client_role(mapper, connection, user):

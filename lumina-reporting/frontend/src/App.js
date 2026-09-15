@@ -1,22 +1,25 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { HashRouter, NavLink, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
+import ActivityLog from './components/ActivityLog';
 import Dashboard from './components/Dashboard';
 import Clients from './components/clients';
 import DataHub from './components/datahub';
 import DataSources from './components/datasources';
 import Disclosures from './components/disclosures';
+import GlobalSearch from './components/GlobalSearch';
 import Marketing from './components/marketing';
 import MyQueue from './components/MyQueue';
 import Pitchbooks from './components/pitchbooks';
 import Reports from './components/reports';
 import ReportDetail from './components/ReportDetail';
 import Templates from './components/templates';
+import Users from './components/users';
 import Login from './pages/Login';
 import ClientPortal from './pages/ClientPortal';
 import PublicReport from './pages/PublicReport';
 import {
   IconBadge, IconBriefcase, IconCheckCircle, IconClipboard, IconDashboard, IconDatabase, IconDocument,
-  IconLayout, IconLogIn, IconLogOut, IconPlug, IconPresentation, IconUsers,
+  IconLayout, IconLogIn, IconLogOut, IconPlug, IconPresentation, IconSearch, IconShield, IconUserGear, IconUsers,
 } from './icons';
 
 // Staff roles -- every non-client role. `client` gets its own separate,
@@ -46,6 +49,8 @@ const navSections = [
   { label: 'Admin', items: [
     ['/clients', 'Clients & Contacts', IconBriefcase, STAFF_ROLES],
     ['/disclosures', 'Disclosures', IconClipboard, STAFF_ROLES],
+    ['/activity', 'Activity Log', IconShield, STAFF_ROLES],
+    ['/users', 'Users & Roles', IconUserGear, ['admin']],
   ] },
   // Staff preview of the client-facing portal -- admin only, not a working
   // task for editor/viewer/compliance.
@@ -60,7 +65,7 @@ const clientNavSections = [
 
 const ROLE_LABEL = { admin: 'Admin', editor: 'Editor', viewer: 'Viewer', client: 'Client', compliance: 'Compliance' };
 
-function Sidebar() {
+function Sidebar({ onSearchOpen }) {
   // useLocation forces a re-render on every navigation (including the
   // post-login/post-logout redirect), so reading localStorage inline here
   // always reflects the current session instead of going stale after login.
@@ -92,6 +97,11 @@ function Sidebar() {
           <div className="brand-subtitle">Institutional Reporting</div>
         </div>
       </div>
+      {role !== 'client' && (
+        <button type="button" className="sidebar-search-trigger" onClick={onSearchOpen}>
+          <IconSearch /><span>Search</span><span className="sidebar-search-kbd">⌘K</span>
+        </button>
+      )}
       <nav>
         {sections.map(section => (
           <React.Fragment key={section.label}>
@@ -129,9 +139,23 @@ function RequireAuth({ children }) {
 }
 
 function AuthenticatedShell() {
+  const [searchOpen, setSearchOpen] = useState(false);
+
+  useEffect(() => {
+    const handleKeyDown = (event) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
+        event.preventDefault();
+        setSearchOpen(true);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
   return (
     <div className="app-shell">
-      <Sidebar />
+      <Sidebar onSearchOpen={() => setSearchOpen(true)} />
+      <GlobalSearch open={searchOpen} onClose={() => setSearchOpen(false)} />
       <main className="main-content">
         <Routes>
           <Route path="/" element={<RequireAuth><Dashboard /></RequireAuth>} />
@@ -148,6 +172,8 @@ function AuthenticatedShell() {
           <Route path="/pitch-books" element={<RequireAuth><Pitchbooks /></RequireAuth>} />
           <Route path="/clients" element={<RequireAuth><Clients /></RequireAuth>} />
           <Route path="/disclosures" element={<RequireAuth><Disclosures /></RequireAuth>} />
+          <Route path="/activity" element={<RequireAuth><ActivityLog /></RequireAuth>} />
+          <Route path="/users" element={<RequireAuth><Users /></RequireAuth>} />
           <Route path="/client-portal" element={<RequireAuth><ClientPortal /></RequireAuth>} />
           <Route path="/login" element={<Login />} />
           <Route path="*" element={<Navigate to="/" replace />} />

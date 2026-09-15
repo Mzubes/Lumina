@@ -60,3 +60,11 @@ export const IconBriefcase = () => (
 export const IconClipboard = () => (
   <svg {...base}><rect x="5" y="4" width="14" height="17" rx="2" /><rect x="9" y="2.5" width="6" height="3" rx="1" /><path d="M8.5 11h7M8.5 15h7" /></svg>
 );
+
+export const IconSearch = () => (
+  <svg {...base}><circle cx="11" cy="11" r="7" /><path d="m20.5 20.5-4.3-4.3" /></svg>
+);
+
+export const IconUserGear = () => (
+  <svg {...base}><circle cx="9" cy="8" r="3.5" /><path d="M2.5 20.5c0-3.6 2.9-6.5 6.5-6.5" /><circle cx="18" cy="17" r="3.2" /><path d="M18 12.3v1.4M18 20.3v1.4M13.3 17h1.4M21.3 17h1.4M14.9 13.9l1 1M20.1 18.1l1 1M14.9 20.1l1-1M20.1 15.9l1-1" /></svg>
+);

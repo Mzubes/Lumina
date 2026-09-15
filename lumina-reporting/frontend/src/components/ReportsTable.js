@@ -43,6 +43,14 @@ export const statusBreakdown = (reports) => {
   }));
 };
 
+// Flattened action-name -> {label, tone} lookup, built from ACTIONS_BY_STATUS.
+// Action names are unique across statuses, so this is unambiguous -- used by
+// the bulk-action bar, which works with a set of action names rather than a
+// single status.
+export const ACTION_DEFS = Object.values(ACTIONS_BY_STATUS)
+  .flat()
+  .reduce((lookup, def) => ({ ...lookup, [def.action]: def }), {});
+
 export const EXPORT_FORMATS = [
   { value: 'pdf', label: 'PDF' },
   { value: 'pptx', label: 'PowerPoint' },
@@ -50,14 +58,42 @@ export const EXPORT_FORMATS = [
   { value: 'raw', label: 'Raw data (JSON)' },
 ];
 
-const ReportsTable = ({ reports, role, onAction, onExport, emptyMessage = 'No reports found.' }) => (
+// selectable/selectedIds/onToggleSelect/onToggleSelectAll are all optional --
+// only reports.js's bulk-action bar passes them, so marketing.js/pitchbooks.js
+// (the table's other two callers) render exactly as before.
+const ReportsTable = ({
+  reports, role, onAction, onExport, emptyMessage = 'No reports found.',
+  selectable = false, selectedIds, onToggleSelect, onToggleSelectAll,
+}) => (
   <table className="reports-table">
     <thead>
-      <tr><th>Title</th><th>Client</th><th>Status</th><th>Created</th><th>Actions</th>{onExport && <th>Export</th>}</tr>
+      <tr>
+        {selectable && (
+          <th className="reports-table-select-col">
+            <input
+              type="checkbox"
+              checked={reports.length > 0 && reports.every(r => selectedIds.has(r.id))}
+              onChange={(event) => onToggleSelectAll(event.target.checked)}
+              aria-label="Select all reports"
+            />
+          </th>
+        )}
+        <th>Title</th><th>Client</th><th>Status</th><th>Created</th><th>Actions</th>{onExport && <th>Export</th>}
+      </tr>
     </thead>
     <tbody>
       {reports.map(report => (
-        <tr key={report.id}>
+        <tr key={report.id} className={selectable && selectedIds.has(report.id) ? 'is-selected' : undefined}>
+          {selectable && (
+            <td className="reports-table-select-col">
+              <input
+                type="checkbox"
+                checked={selectedIds.has(report.id)}
+                onChange={() => onToggleSelect(report.id)}
+                aria-label={`Select ${report.title}`}
+              />
+            </td>
+          )}
           <td>
             <Link to={`/reports/${report.id}`} className="reports-table-title-link">{report.title}</Link>
             {(report.team || report.report_type) && (
@@ -104,7 +140,7 @@ const ReportsTable = ({ reports, role, onAction, onExport, emptyMessage = 'No re
         </tr>
       ))}
       {reports.length === 0 && (
-        <tr><td colSpan={onExport ? 6 : 5} className="reports-table-empty">{emptyMessage}</td></tr>
+        <tr><td colSpan={(onExport ? 6 : 5) + (selectable ? 1 : 0)} className="reports-table-empty">{emptyMessage}</td></tr>
       )}
     </tbody>
   </table>

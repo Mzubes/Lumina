@@ -5,6 +5,7 @@ from flask_cors import CORS
 from database import configure_database, db_session, init_db, shutdown_session
 from models import User
 from seed_demo import seed_demo
+from routes.activity import activity_blueprint
 from routes.auth import auth_blueprint
 from routes.clients import clients_blueprint
 from routes.dashboard import dashboard_blueprint
@@ -15,6 +16,7 @@ from routes.portfolio import portfolio_blueprint
 from routes.public import public_blueprint
 from routes.reports import reports_blueprint
 from routes.templates import templates_blueprint
+from routes.users import users_blueprint
 
 def create_app(test_config=None):
     app = Flask(__name__)
@@ -30,6 +32,7 @@ def create_app(test_config=None):
         'expose_headers': ['Content-Disposition'],
     }})
 
+    app.register_blueprint(activity_blueprint)
     app.register_blueprint(auth_blueprint)
     app.register_blueprint(dashboard_blueprint)
     app.register_blueprint(data_hub_blueprint)
@@ -40,6 +43,7 @@ def create_app(test_config=None):
     app.register_blueprint(portfolio_blueprint)
     app.register_blueprint(disclosures_blueprint)
     app.register_blueprint(public_blueprint)
+    app.register_blueprint(users_blueprint)
 
     @app.get('/api/health')
     def health():
