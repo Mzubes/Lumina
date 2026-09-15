@@ -11,6 +11,7 @@ from renderers import CONTENT_TYPES, RENDERERS
 from report_content import resolve_report_content, reviewable_components
 from report_generator import generate_pdf
 from routes.auth import require_auth
+import workflow_engine
 from workflow_legacy import InvalidTransition, apply_transition, requires_compliance
 
 reports_blueprint = Blueprint('reports', __name__)
@@ -21,14 +22,23 @@ REPORTS_DIR = BACKEND_DIR / 'static' / 'reports'
 REPORT_TYPES = ['factsheet', 'marketing', 'performance', 'holdings', 'pitchbook', 'meeting_pack', 'custom']
 
 def _scoped_query():
+    # Distribution visibility is no longer a SQL-level status='distributed'
+    # filter here -- workflow_engine.report_is_distributed() has to inspect
+    # a diagram-backed report's active step instances (which node, if any,
+    # is flagged is_distribution_gate), not just compare a status string, so
+    # that check happens in Python over this client's own (small) report
+    # set instead. See _get_scoped_report/list_reports.
     query = db_session.query(Report)
     user = g.current_user
     if user.get('role') == 'client':
-        query = query.filter_by(client_id=user.get('client_id'), status='distributed')
+        query = query.filter_by(client_id=user.get('client_id'))
     return query
 
 def _get_scoped_report(report_id):
-    return _scoped_query().filter_by(id=report_id).first()
+    report = _scoped_query().filter_by(id=report_id).first()
+    if report and g.current_user.get('role') == 'client' and not workflow_engine.report_is_distributed(report):
+        return None
+    return report
 
 def _save_pdf_bytes(pdf_bytes, report_id):
     REPORTS_DIR.mkdir(parents=True, exist_ok=True)
@@ -42,6 +52,12 @@ def _serialize_report(report):
     # (done/current/skipped) after every action, not just on initial load.
     payload = report.serialize()
     payload['complianceRequired'] = requires_compliance(report)
+    # Empty for a legacy (non-diagram) report -- the frontend falls back to
+    # the plain status string for those until it's migrated to render this.
+    payload['activeSteps'] = (
+        [instance.serialize() for instance in workflow_engine.active_instances(report)]
+        if report.workflow_diagram_id is not None else []
+    )
     return payload
 
 @reports_blueprint.get('/api/reports')
@@ -68,6 +84,8 @@ def list_reports():
         if search:
             query = query.filter(Report.title.ilike(f'%{search}%'))
     reports = query.order_by(Report.created_at.desc()).all()
+    if g.current_user.get('role') == 'client':
+        reports = [r for r in reports if workflow_engine.report_is_distributed(r)]
     return jsonify([report.serialize() for report in reports])
 
 @reports_blueprint.get('/api/reports/facets')
@@ -205,6 +223,18 @@ def export_report(report_id):
         report, request.args.get('format', 'pdf'), request.args.get('raw_format', 'json'),
     )
 
+# The action_label a Phase-5 auto-generated diagram's edge must carry for
+# each legacy verb below to keep resolving correctly once a report has a
+# workflow_diagram_id -- see _transition_route's diagram-aware branch.
+_LEGACY_ACTION_LABELS = {
+    'submit': 'Submit',
+    'approve': 'Approve',
+    'reject': 'Reject',
+    'distribute': 'Distribute',
+    'certify': 'Certify',
+    'request_changes': 'Request Changes',
+}
+
 def _transition_route(action, roles):
     @require_auth(roles=roles)
     def handler(report_id):
@@ -212,8 +242,32 @@ def _transition_route(action, roles):
         if not report:
             return jsonify({'message': 'Report not found'}), 404
         data = request.get_json(silent=True) or {}
+        note = data.get('note')
+
+        if report.workflow_diagram_id is not None:
+            # Diagram-backed report: resolve this legacy verb to whichever
+            # currently-eligible edge carries the matching action_label, so
+            # existing per-verb call sites (ReportDetail.js) keep working
+            # unmodified until they're migrated onto /transition directly.
+            role = g.current_user.get('role')
+            user_id = g.current_user['user_id']
+            label = _LEGACY_ACTION_LABELS[action]
+            match = next(
+                (a for a in workflow_engine.eligible_actions(report, role, user_id) if a['label'] == label),
+                None,
+            )
+            if match is None:
+                return jsonify({'message': f"Cannot {action} a report in its current step"}), 409
+            try:
+                workflow_engine.apply_transition(report, match['edge_id'], user_id, note=note)
+            except workflow_engine.InvalidTransition as error:
+                return jsonify({'message': str(error)}), 409
+            except workflow_engine.NotAuthorized as error:
+                return jsonify({'message': str(error)}), 403
+            return jsonify(_serialize_report(report))
+
         try:
-            apply_transition(report, action, g.current_user['user_id'], note=data.get('note'))
+            apply_transition(report, action, g.current_user['user_id'], note=note)
         except InvalidTransition as error:
             return jsonify({'message': str(error)}), 409
         return jsonify(_serialize_report(report))
@@ -244,6 +298,39 @@ reports_blueprint.add_url_rule(
     methods=['POST'], endpoint='request_changes_report',
 )
 
+@reports_blueprint.get('/api/reports/<int:report_id>/eligible-actions')
+@require_auth(roles=['admin', 'editor', 'viewer', 'compliance'])
+def get_eligible_actions(report_id):
+    """What the caller can currently do on this report, per its diagram --
+    empty for a legacy (non-diagram) report. Powers action-button rendering
+    without duplicating workflow_engine's eligibility logic in the frontend."""
+    report = _get_scoped_report(report_id)
+    if not report:
+        return jsonify({'message': 'Report not found'}), 404
+    role = g.current_user.get('role')
+    return jsonify(workflow_engine.eligible_actions(report, role, g.current_user['user_id']))
+
+@reports_blueprint.post('/api/reports/<int:report_id>/transition')
+@require_auth(roles=['admin', 'editor', 'viewer', 'compliance'])
+def transition_report(report_id):
+    """The generic replacement for the six legacy verb routes above -- fires
+    a specific diagram edge by id. 409s (not a valid transition) for a
+    report with no diagram, same as an unknown edge_id would."""
+    report = _get_scoped_report(report_id)
+    if not report:
+        return jsonify({'message': 'Report not found'}), 404
+    data = request.get_json(silent=True) or {}
+    edge_id = data.get('edge_id')
+    if not edge_id:
+        return jsonify({'message': 'edge_id is required'}), 400
+    try:
+        workflow_engine.apply_transition(report, edge_id, g.current_user['user_id'], note=data.get('note'))
+    except workflow_engine.InvalidTransition as error:
+        return jsonify({'message': str(error)}), 409
+    except workflow_engine.NotAuthorized as error:
+        return jsonify({'message': str(error)}), 403
+    return jsonify(_serialize_report(report))
+
 @reports_blueprint.get('/api/reports/<int:report_id>/distribution-links')
 @require_auth(roles=['admin', 'editor', 'viewer', 'compliance'])
 def list_distribution_links(report_id):
@@ -262,7 +349,7 @@ def create_distribution_link(report_id):
     report = _get_scoped_report(report_id)
     if not report:
         return jsonify({'message': 'Report not found'}), 404
-    if report.status != 'distributed':
+    if not workflow_engine.report_is_distributed(report):
         return jsonify({'message': 'Only distributed reports can be shared via a link'}), 409
 
     data = request.get_json(silent=True) or {}

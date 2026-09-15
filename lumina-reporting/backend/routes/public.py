@@ -1,5 +1,6 @@
 from flask import Blueprint, jsonify, request
 
+import workflow_engine
 from database import db_session
 from models import DistributionLink, Report, ReportTemplate
 from report_content import resolve_report_content
@@ -9,14 +10,18 @@ public_blueprint = Blueprint('public', __name__)
 
 def _get_report_for_token(token):
     """A link only ever grants access to the exact report it was minted for,
-    and only while it's neither revoked nor the report has somehow left the
-    'distributed' state -- there is no other authorization check on this
-    entire module, so this is the one gate everything below relies on."""
+    and only while it's neither revoked nor the report has somehow left its
+    distributed state -- there is no other authorization check on this
+    entire module, so this is the one gate everything below relies on.
+    workflow_engine.report_is_distributed() checks a diagram-backed report's
+    current active step(s) for an is_distribution_gate node rather than
+    string-matching status == 'distributed', so a firm renaming/restructuring
+    its steps can't silently break this gate."""
     link = db_session.query(DistributionLink).filter_by(token=token).first()
     if not link or link.revoked_at is not None:
         return None
     report = db_session.query(Report).filter_by(id=link.report_id).first()
-    if not report or report.status != 'distributed':
+    if not report or not workflow_engine.report_is_distributed(report):
         return None
     return report
 

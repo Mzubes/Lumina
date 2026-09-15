@@ -212,3 +212,29 @@ def apply_transition(report, edge_id, actor_id, note=None):
     _recompute_status(report, from_status, actor_id, note)
     db_session.commit()
     return report
+
+def is_distribution_gate_reached(report):
+    """True once the report's current active step(s) include a node flagged
+    is_distribution_gate. A terminal node, once entered, stays 'active'
+    forever (nothing ever completes it), so this reads as a permanent
+    resting state once reached, the same way status == 'distributed' does
+    for a legacy (non-diagram) report."""
+    diagram = get_diagram(report)
+    if diagram is None:
+        return False
+    nodes_by_id, _ = _index(diagram)
+    return any(
+        nodes_by_id.get(instance.node_id, {}).get('is_distribution_gate')
+        for instance in active_instances(report)
+    )
+
+def report_is_distributed(report):
+    """The generic replacement for string-matching report.status ==
+    'distributed' -- used everywhere that check gated something (the public
+    distribution-link security check, client-portal visibility, creating a
+    new distribution link). Falls back to the legacy status string for a
+    report with no workflow_diagram_id, so this is a drop-in replacement
+    with identical behavior until a report actually has a diagram."""
+    if report.workflow_diagram_id is not None:
+        return is_distribution_gate_reached(report)
+    return report.status == 'distributed'
