@@ -33,6 +33,10 @@ export const IconUsers = () => (
   <svg {...base}><circle cx="9" cy="8" r="3.2" /><path d="M2.5 20c0-3.3 2.9-6 6.5-6s6.5 2.7 6.5 6" /><path d="M16.5 4.3a3.2 3.2 0 0 1 0 6.2" /><path d="M21.5 20c0-2.8-2-5.1-4.8-5.8" /></svg>
 );
 
+export const IconBook = () => (
+  <svg {...base}><path d="M4 19.5V5.2C4 4 5 3.5 6 3.5h5.5v17H6c-1 0-2 .3-2 1Z" /><path d="M20 19.5V5.2c0-1.2-1-1.7-2-1.7h-5.5v17H18c1 0 2 .3 2 1Z" /></svg>
+);
+
 export const IconLogIn = () => (
   <svg {...base}><path d="M14 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" /><path d="M10 17l5-5-5-5" /><path d="M15 12H3" /></svg>
 );

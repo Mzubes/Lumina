@@ -9,6 +9,7 @@ from roles import SYSTEM_ROLES
 from seed_demo import seed_demo
 from routes.activity import activity_blueprint
 from routes.auth import auth_blueprint
+from routes.book import book_blueprint
 from routes.clients import clients_blueprint
 from routes.dashboard import dashboard_blueprint
 from routes.data_hub import data_hub_blueprint
@@ -38,6 +39,7 @@ def create_app(test_config=None):
 
     app.register_blueprint(activity_blueprint)
     app.register_blueprint(auth_blueprint)
+    app.register_blueprint(book_blueprint)
     app.register_blueprint(dashboard_blueprint)
     app.register_blueprint(data_hub_blueprint)
     app.register_blueprint(data_sources_blueprint)

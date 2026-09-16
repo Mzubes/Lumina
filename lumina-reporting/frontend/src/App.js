@@ -7,6 +7,7 @@ import DataHub from './components/datahub';
 import DataSources from './components/datasources';
 import Disclosures from './components/disclosures';
 import GlobalSearch from './components/GlobalSearch';
+import InternalPortal from './components/InternalPortal';
 import Marketing from './components/marketing';
 import MyQueue from './components/MyQueue';
 import Pitchbooks from './components/pitchbooks';
@@ -19,7 +20,7 @@ import Login from './pages/Login';
 import ClientPortal from './pages/ClientPortal';
 import PublicReport from './pages/PublicReport';
 import {
-  IconBadge, IconBriefcase, IconCheckCircle, IconClipboard, IconDashboard, IconDatabase, IconDocument,
+  IconBadge, IconBook, IconBriefcase, IconCheckCircle, IconClipboard, IconDashboard, IconDatabase, IconDocument,
   IconLayout, IconLogIn, IconLogOut, IconPlug, IconPresentation, IconSearch, IconShield, IconUserGear, IconUsers,
   IconWorkflow,
 } from './icons';
@@ -33,7 +34,16 @@ const STAFF_ROLES = ['admin', 'editor', 'viewer', 'compliance'];
 const QUEUE_ROLES = ['admin', 'editor', 'compliance'];
 
 // Each item's 4th element is the roles that see it; omitted = every staff role.
+// `accent: true` marks a group (vs. an ordinary section) -- rendered in the
+// brand color instead of muted gray, same distinction the design mockup
+// draws between "Client Hub" and the ordinary Overview/Data/... sections.
 const navSections = [
+  { label: 'Client Hub', accent: true, items: [
+    // Admin-only preview of the client-facing portal -- not a working task
+    // for editor/viewer/compliance.
+    ['/client-portal', 'Client Portal (preview)', IconUsers, ['admin']],
+    ['/internal-portal', 'Internal Portal', IconBook, STAFF_ROLES],
+  ] },
   { label: 'Overview', items: [['/', 'Dashboard', IconDashboard, STAFF_ROLES]] },
   { label: 'Data', items: [
     ['/data-hub', 'Data Hub', IconDatabase, STAFF_ROLES],
@@ -55,9 +65,6 @@ const navSections = [
     ['/users', 'Users & Roles', IconUserGear, ['admin']],
     ['/workflow-groups', 'Workflow Groups', IconWorkflow, ['admin']],
   ] },
-  // Staff preview of the client-facing portal -- admin only, not a working
-  // task for editor/viewer/compliance.
-  { label: 'Client', items: [['/client-portal', 'Client Portal (preview)', IconUsers, ['admin']]] },
 ];
 
 // A client's entire nav -- not a filtered-down staff nav, a separate one.
@@ -109,7 +116,7 @@ function Sidebar({ onSearchOpen }) {
       <nav>
         {sections.map(section => (
           <React.Fragment key={section.label}>
-            <div className="nav-section-label">{section.label}</div>
+            <div className={`nav-section-label${section.accent ? ' nav-section-label--accent' : ''}`}>{section.label}</div>
             {section.items.map(([to, label, Icon]) => (
               <NavLink key={to} to={to} end={to === '/'}>
                 <Icon /><span>{label}</span>
@@ -180,6 +187,7 @@ function AuthenticatedShell() {
           <Route path="/users" element={<RequireAuth><Users /></RequireAuth>} />
           <Route path="/workflow-groups" element={<RequireAuth><WorkflowGroups /></RequireAuth>} />
           <Route path="/client-portal" element={<RequireAuth><ClientPortal /></RequireAuth>} />
+          <Route path="/internal-portal" element={<RequireAuth><InternalPortal /></RequireAuth>} />
           <Route path="/login" element={<Login />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
