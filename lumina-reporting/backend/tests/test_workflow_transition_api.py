@@ -82,23 +82,20 @@ def test_client_role_forbidden_from_transition_endpoints(client, client_portal_h
     with_client = client.post('/api/reports/1/transition', headers=client_portal_headers, json={'edge_id': 'x'})
     assert with_client.status_code == 403
 
-def test_legacy_submit_verb_resolves_through_new_engine_for_diagram_backed_report(
+def test_legacy_submit_verb_409s_for_a_diagram_backed_report(
     app, client, auth_headers, sample_client, sample_template,
 ):
+    """The six legacy verb routes (submit/approve/.../certify/request-changes)
+    are exclusively the legacy engine's interface now -- the frontend fires
+    a diagram-backed report's actions through POST /transition using
+    eligibleActions' edge_ids (see getReportActions in ReportsTable.js), and
+    these routes no longer resolve verbs to diagram edges on its behalf. The
+    legacy engine's TRANSITIONS lookup is keyed on the lowercase legacy
+    status strings, which a diagram-backed report's capitalized display
+    label ('Draft', not 'draft') never matches, so this call correctly 409s
+    rather than silently mutating the report."""
     report_id = _create_report(client, auth_headers, sample_client)
     _attach_diagram(app, sample_template, report_id)
-
-    response = client.post(f'/api/reports/{report_id}/submit', headers=auth_headers)
-    assert response.status_code == 200
-    body = response.get_json()
-    assert body['status'] == 'Published'
-
-def test_legacy_submit_verb_409s_once_no_matching_edge_is_eligible(
-    app, client, auth_headers, sample_client, sample_template,
-):
-    report_id = _create_report(client, auth_headers, sample_client)
-    _attach_diagram(app, sample_template, report_id)
-    client.post(f'/api/reports/{report_id}/submit', headers=auth_headers)  # now at 'published', a terminal node
 
     response = client.post(f'/api/reports/{report_id}/submit', headers=auth_headers)
     assert response.status_code == 409
@@ -132,7 +129,7 @@ def test_get_report_steps_tracks_full_history_not_just_active(
     assert empty_or_start[0]['state'] == 'done'
     assert empty_or_start[1]['state'] == 'active'
 
-    client.post(f'/api/reports/{report_id}/submit', headers=auth_headers)
+    client.post(f'/api/reports/{report_id}/transition', headers=auth_headers, json={'edge_id': 'e-submit'})
 
     after_submit = client.get(f'/api/reports/{report_id}/steps', headers=auth_headers).get_json()
     assert [s['node_id'] for s in after_submit] == ['start', 'draft', 'published']
@@ -151,7 +148,7 @@ def test_distribution_gate_is_node_flag_based_not_string_based(
     denied = client.post(f'/api/reports/{report_id}/distribution-links', headers=auth_headers, json={})
     assert denied.status_code == 409
 
-    client.post(f'/api/reports/{report_id}/submit', headers=auth_headers)
+    client.post(f'/api/reports/{report_id}/transition', headers=auth_headers, json={'edge_id': 'e-submit'})
 
     allowed = client.post(f'/api/reports/{report_id}/distribution-links', headers=auth_headers, json={})
     assert allowed.status_code == 201

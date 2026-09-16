@@ -270,36 +270,29 @@ def export_report(report_id):
         report, request.args.get('format', 'pdf'), request.args.get('raw_format', 'json'),
     )
 
-# The action_label a Phase-5 auto-generated diagram's edge must carry for
-# each legacy verb below to keep resolving correctly once a report has a
-# workflow_diagram_id -- see _transition_route's diagram-aware branch.
-_LEGACY_ACTION_LABELS = {
-    'submit': 'Submit',
-    'approve': 'Approve',
-    'reject': 'Reject',
-    'distribute': 'Distribute',
-    'certify': 'Certify',
-    'request_changes': 'Request Changes',
-}
-
+# These six routes are now exclusively the legacy (non-diagram) engine's
+# interface -- workflow_legacy.py's fixed five-status pipeline, permanently
+# used by any report with no template_id (pin_to_active_diagram, called at
+# creation, only ever fires when a template_id is given, so a template-less
+# report can never acquire a workflow_diagram_id and always stays on this
+# path). A diagram-backed report ignores these entirely: eligibleActions on
+# every report payload only ever returns diagram edges for one, and the
+# frontend (ReportsTable/MyQueue/ReportDetail's getReportActions) fires
+# those through POST /transition, never through a verb URL. Earlier in this
+# rollout these routes also carried a compatibility shim that resolved a
+# verb to a matching diagram edge, so ReportDetail.js could keep calling
+# them unmodified before it was migrated onto /transition directly -- now
+# that migration is done, the shim is dead code and has been removed.
 def _legacy_compliance_group_id():
     # role='compliance' can no longer be created (SYSTEM_ROLES dropped it in
     # the Phase 5b cleanup) -- a template-less legacy report that reaches
-    # 'compliance' status must still be certifiable by *someone*, so the
-    # legacy branch below checks membership in this group instead of the
-    # role string it used to gate on.
+    # 'compliance' status must still be certifiable by *someone*, so this
+    # checks membership in this group instead of the role string it used to
+    # gate on.
     group = db_session.query(WorkflowGroup).filter_by(name='Compliance').first()
     return group.id if group else None
 
 def _transition_route(action, roles):
-    # Auth is deliberately NOT gated by `roles` at the decorator level
-    # anymore: once a report has a workflow_diagram_id, who's allowed to
-    # act is determined by the engine (system role + workflow group
-    # membership on the report's current step), not a fixed per-verb role
-    # list -- a compliance user migrated to role='editor' + "Compliance"
-    # group membership must still be able to certify a migrated report
-    # through this same URL. The legacy branch below re-checks `roles`
-    # itself, so a non-diagram report's authorization is unchanged.
     @require_auth()
     def handler(report_id):
         report = _get_scoped_report(report_id)
@@ -309,33 +302,9 @@ def _transition_route(action, roles):
         note = data.get('note')
         role = g.current_user.get('role')
 
-        if report.workflow_diagram_id is not None:
-            # Diagram-backed report: resolve this legacy verb to whichever
-            # currently-eligible edge carries the matching action_label, so
-            # existing per-verb call sites (ReportDetail.js) keep working
-            # unmodified until they're migrated onto /transition directly.
-            user_id = g.current_user['user_id']
-            label = _LEGACY_ACTION_LABELS[action]
-            match = next(
-                (a for a in workflow_engine.eligible_actions(report, role, user_id) if a['label'] == label),
-                None,
-            )
-            if match is None:
-                return jsonify({'message': f"Cannot {action} a report in its current step"}), 409
-            try:
-                workflow_engine.apply_transition(report, match['edge_id'], user_id, note=note)
-            except workflow_engine.InvalidTransition as error:
-                return jsonify({'message': str(error)}), 409
-            except workflow_engine.NotAuthorized as error:
-                return jsonify({'message': str(error)}), 403
-            return jsonify(_serialize_report(report))
-
-        # Legacy (non-diagram) report: the original per-verb role check,
-        # just moved from the decorator into the handler so it runs
-        # alongside (not instead of) the diagram-aware branch above. certify
-        # / request_changes no longer have a role to check against role=
-        # 'compliance' can't exist anymore -- those two fall through to a
-        # "Compliance" group-membership check instead (see
+        # certify/request_changes no longer have a role to check against --
+        # role='compliance' can't exist anymore -- so those two check
+        # "Compliance" group membership instead (see
         # _legacy_compliance_group_id above). No admin override here,
         # deliberately: the original rule was that even an admin cannot
         # self-certify a report they could also submit/approve -- that

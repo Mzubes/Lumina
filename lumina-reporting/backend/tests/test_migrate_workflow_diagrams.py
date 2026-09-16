@@ -145,6 +145,17 @@ def test_is_idempotent(app, sample_client):
         diagrams = db_session.query(WorkflowDiagram).filter_by(template_id=template.id).all()
         assert len(diagrams) == 1
 
+def _fire(client, headers, report_id, label):
+    """Fires a diagram-backed report's action by its edge label -- the same
+    lookup the real frontend does (getReportActions reads eligibleActions,
+    fireReportAction posts the matching edge_id to /transition). The six
+    legacy verb routes are the legacy (non-diagram) engine's interface only
+    now, so a diagram-backed report (like the one this test builds) is
+    driven through /transition directly."""
+    actions = client.get(f'/api/reports/{report_id}/eligible-actions', headers=headers).get_json()
+    match = next(a for a in actions if a['label'] == label)
+    return client.post(f'/api/reports/{report_id}/transition', headers=headers, json={'edge_id': match['edge_id']})
+
 def test_generated_diagram_reproduces_legacy_behavior_via_transition_endpoint(client, auth_headers, editor_headers, sample_client):
     template = client.post('/api/templates', headers=editor_headers, json={
         'name': 'Factsheet Template', 'components': COMPONENTS,
@@ -156,15 +167,15 @@ def test_generated_diagram_reproduces_legacy_behavior_via_transition_endpoint(cl
     migrate_workflow_diagrams()
 
     report_id = report['id']
-    assert client.post(f'/api/reports/{report_id}/submit', headers=auth_headers).status_code == 200
-    approved = client.post(f'/api/reports/{report_id}/approve', headers=auth_headers)
+    assert _fire(client, auth_headers, report_id, 'Submit').status_code == 200
+    approved = _fire(client, auth_headers, report_id, 'Approve')
     assert approved.status_code == 200
     assert approved.get_json()['status'] == 'Compliance'
 
-    certified = client.post(f'/api/reports/{report_id}/certify', headers=auth_headers)
+    certified = _fire(client, auth_headers, report_id, 'Certify')
     assert certified.status_code == 200
     assert certified.get_json()['status'] == 'Approved'
 
-    distributed = client.post(f'/api/reports/{report_id}/distribute', headers=auth_headers)
+    distributed = _fire(client, auth_headers, report_id, 'Distribute')
     assert distributed.status_code == 200
     assert distributed.get_json()['status'] == 'Distributed'
