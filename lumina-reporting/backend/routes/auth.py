@@ -48,4 +48,4 @@ def login():
         'client_id': user.client_id,
         'exp': datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(minutes=15),
     }, current_app.config['JWT_SECRET_KEY'], algorithm='HS256')
-    return jsonify({'token': token, 'role': user.role, 'client_id': user.client_id})
+    return jsonify({'token': token, 'role': user.role, 'client_id': user.client_id, 'email': user.email})

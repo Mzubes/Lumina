@@ -270,7 +270,18 @@ select { appearance: none; background-image: linear-gradient(45deg, transparent 
   color: var(--chip-color);
 }
 .metric-icon-chip svg { width: 17px; height: 17px; }
+.metric-tile-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 34px; }
 .widget-stat-tile strong { margin-top: 14px; }
+/* Pill badge, not inline text -- tinted to match direction, same idiom as
+   a workflow-status badge (a computed tint of the same color used for its
+   text/icon), so "up" and "down" read as distinct chips at a glance. */
+.metric-delta-pill {
+  display: inline-flex; align-items: center; gap: 3px; padding: 3px 8px;
+  border-radius: 999px; font-size: 11.5px; font-weight: 700;
+}
+.metric-delta-pill.up { color: var(--c-approved); background: color-mix(in srgb, var(--c-approved) 14%, transparent); }
+.metric-delta-pill.down { color: var(--c-critical); background: color-mix(in srgb, var(--c-critical) 14%, transparent); }
+.metric-tile-prev { display: block; margin-top: 8px; font-size: 12px; color: var(--ink-muted); font-weight: 500; }
 
 .panel + .panel { margin-top: 20px; }
 .panel-header { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 4px; }
@@ -590,6 +601,23 @@ select { appearance: none; background-image: linear-gradient(45deg, transparent 
 .bar-chart-tooltip span { font-size: 11.5px; color: #cbd0d6; }
 @keyframes chart-tooltip-in { from { opacity: 0; transform: translateX(-50%) translateY(3px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }
 
+/* ---------- area chart (smooth single-series trend) ---------- */
+.area-chart { position: relative; }
+.area-chart-svg { width: 100%; height: 180px; display: block; overflow: visible; }
+.area-chart-gridline { stroke: var(--panel-border); stroke-width: 1; }
+.area-chart-crosshair { stroke: var(--panel-border-strong); stroke-width: 1; }
+.area-chart-dot { transition: r .12s ease; cursor: pointer; }
+.area-chart-labels { display: flex; justify-content: space-between; margin-top: 8px; }
+.area-chart-labels span { font-size: 11.5px; color: var(--ink-muted); font-weight: 500; }
+.area-chart-tooltip {
+  position: absolute; top: 4px; transform: translateX(-50%);
+  background: var(--ink-primary); border-radius: 9px;
+  padding: 8px 11px; white-space: nowrap; box-shadow: var(--shadow-md); pointer-events: none;
+  display: flex; flex-direction: column; gap: 2px; z-index: 5; animation: chart-tooltip-in .12s ease-out;
+}
+.area-chart-tooltip strong { font-size: 13px; color: #fff; font-weight: 700; font-variant-numeric: tabular-nums; }
+.area-chart-tooltip span { font-size: 11.5px; color: #cbd0d6; }
+
 /* ---------- filter bar ---------- */
 .filter-bar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 18px; }
 .filter-pills { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -664,7 +692,7 @@ select { appearance: none; background-image: linear-gradient(45deg, transparent 
 .composition-bar-legend { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px 22px; }
 .composition-bar-legend li { display: flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--ink-secondary); padding: 2px 0; }
 .composition-bar-legend li.is-hovered { color: var(--ink-primary); }
-.composition-bar-swatch { width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0; }
+.composition-bar-swatch { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
 .composition-bar-legend-label { color: var(--ink-primary); font-weight: 500; }
 .composition-bar-legend-value { color: var(--ink-muted); font-variant-numeric: tabular-nums; }
 .composition-bar-empty { background: var(--page-bg-1); }
@@ -683,7 +711,7 @@ select { appearance: none; background-image: linear-gradient(45deg, transparent 
 .donut-chart-legend { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; min-width: 0; flex: 1; }
 .donut-chart-legend li { display: flex; align-items: center; gap: 9px; font-size: 13px; color: var(--ink-secondary); padding: 2px 0; }
 .donut-chart-legend li.is-hovered { color: var(--ink-primary); }
-.donut-chart-swatch { width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0; }
+.donut-chart-swatch { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
 .donut-chart-legend-label { color: var(--ink-primary); font-weight: 500; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .donut-chart-legend-value { color: var(--ink-muted); font-variant-numeric: tabular-nums; font-size: 12.5px; flex-shrink: 0; }
 

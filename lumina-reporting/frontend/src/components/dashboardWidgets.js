@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
+import AreaChart from './charts/AreaChart';
 import BarChart from './charts/BarChart';
 import CompositionBar from './charts/CompositionBar';
 import DonutChart from './charts/DonutChart';
@@ -37,37 +38,41 @@ const toWeeklyData = (rows) => (rows || []).map(row => ({ label: row.label, valu
 
 // Week-over-week change in report volume, from the same reportsByWeek series
 // the "Weekly report volume" chart already plots -- a real comparison against
-// the prior period, not a fabricated trend number. Needs at least 2 complete
-// weeks; the most recent entry can still be a partial week in progress, so
-// it's excluded from both sides of the comparison.
+// the prior period (including the raw previous count, for the "Prev N" line),
+// not a fabricated trend number. Needs at least 2 complete weeks; the most
+// recent entry can still be a partial week in progress, so it's excluded
+// from both sides of the comparison.
 const weekOverWeekDelta = (weeks) => {
   const complete = (weeks || []).slice(0, -1);
   if (complete.length < 2) return null;
   const [previous, current] = complete.slice(-2);
   if (!previous.count) return null;
   const pct = Math.round(((current.count - previous.count) / previous.count) * 100);
-  return { direction: pct >= 0 ? 'up' : 'down', pct: Math.abs(pct) };
+  return { direction: pct >= 0 ? 'up' : 'down', pct: Math.abs(pct), previous: previous.count };
 };
 
-// No label span here -- the widget card's own header already shows the
-// title, so a second copy inside the body would just repeat it. The icon
-// chip carries the accent color (a tinted circle, not the number itself --
-// per the dataviz skill, a stat-tile value stays in ink, never the series
-// color) so each metric reads distinctly at a glance instead of as a wall
-// of identical black-on-white numbers.
+// Header row carries the icon chip (left) and, only where a genuine prior-
+// period comparison exists, a tinted delta pill (right) -- most tiles here
+// are point-in-time snapshots (pending approvals right now, say) with no
+// "previous period" to honestly compare against, so the pill only appears
+// when the caller actually passes a delta. The value stays in ink, never
+// the accent color, same rule as the icon chip's comment below.
 const StatTile = ({ value, icon: Icon, accent, delta }) => (
   <article className="metric-card widget-stat-tile">
-    {Icon && (
-      <span className="metric-icon-chip" style={{ '--chip-color': accent || 'var(--brand)' }}>
-        <Icon />
-      </span>
-    )}
+    <div className="metric-tile-header">
+      {Icon && (
+        <span className="metric-icon-chip" style={{ '--chip-color': accent || 'var(--brand)' }}>
+          <Icon />
+        </span>
+      )}
+      {delta && (
+        <span className={`metric-delta-pill ${delta.direction}`}>
+          {delta.direction === 'up' ? '▲' : '▼'} {delta.pct}%
+        </span>
+      )}
+    </div>
     <strong>{value}</strong>
-    {delta && (
-      <span className={`metric-card-delta ${delta.direction}`}>
-        {delta.direction === 'up' ? '▲' : '▼'} {delta.pct}% <span className="metric-card-delta-note">vs last week</span>
-      </span>
-    )}
+    {delta && <span className="metric-tile-prev">Prev week: {delta.previous.toLocaleString()}</span>}
   </article>
 );
 
@@ -217,7 +222,7 @@ export const WIDGET_LIBRARY = [
   { id: 'chart-by-client', title: 'Report volume by client', size: 'md', roles: ['admin', 'editor'], demo: false,
     render: (dashboard) => <BarChart title="By client" data={toCategoricalData(dashboard.reportsByClient)} /> },
   { id: 'chart-weekly-volume', title: 'Weekly report volume', size: 'md', roles: ['admin', 'editor'], demo: false,
-    render: (dashboard) => <BarChart title="Last 8 weeks" data={toWeeklyData(dashboard.reportsByWeek)} unitLabel="reports" /> },
+    render: (dashboard) => <AreaChart title="Last 8 weeks" data={toWeeklyData(dashboard.reportsByWeek)} /> },
   { id: 'recent-reports', title: 'Recent reports', size: 'md', roles: ['admin', 'editor', 'viewer'], demo: false,
     render: (dashboard) => <RecentReportsWidget dashboard={dashboard} /> },
   { id: 'data-source-health', title: 'Data source health', size: 'sm', roles: ['admin', 'editor'], demo: false,

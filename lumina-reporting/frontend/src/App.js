@@ -81,6 +81,7 @@ function Sidebar({ onSearchOpen }) {
     window.localStorage.removeItem('lumina_token');
     window.localStorage.removeItem('lumina_role');
     window.localStorage.removeItem('lumina_client_id');
+    window.localStorage.removeItem('lumina_email');
     navigate('/login');
   };
 

@@ -19,6 +19,7 @@ const Login = () => {
       const data = await apiFetch('/api/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) });
       window.localStorage.setItem('lumina_token', data.token);
       window.localStorage.setItem('lumina_role', data.role || '');
+      window.localStorage.setItem('lumina_email', data.email || '');
       if (data.client_id != null) {
         window.localStorage.setItem('lumina_client_id', data.client_id);
       } else {
