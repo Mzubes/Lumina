@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import BarChart from './charts/BarChart';
 import CompositionBar from './charts/CompositionBar';
+import DonutChart from './charts/DonutChart';
 import { IconClipboard, IconDocument, IconSearch, IconShield, IconUsers } from '../icons';
 
 // The 5 legacy statuses keep their fixed named colors; anything else
@@ -34,13 +35,27 @@ const toCategoricalData = (rows) => (rows || []).map((row, index) => ({
 
 const toWeeklyData = (rows) => (rows || []).map(row => ({ label: row.label, value: row.count, color: 'var(--brand)' }));
 
+// Week-over-week change in report volume, from the same reportsByWeek series
+// the "Weekly report volume" chart already plots -- a real comparison against
+// the prior period, not a fabricated trend number. Needs at least 2 complete
+// weeks; the most recent entry can still be a partial week in progress, so
+// it's excluded from both sides of the comparison.
+const weekOverWeekDelta = (weeks) => {
+  const complete = (weeks || []).slice(0, -1);
+  if (complete.length < 2) return null;
+  const [previous, current] = complete.slice(-2);
+  if (!previous.count) return null;
+  const pct = Math.round(((current.count - previous.count) / previous.count) * 100);
+  return { direction: pct >= 0 ? 'up' : 'down', pct: Math.abs(pct) };
+};
+
 // No label span here -- the widget card's own header already shows the
 // title, so a second copy inside the body would just repeat it. The icon
 // chip carries the accent color (a tinted circle, not the number itself --
 // per the dataviz skill, a stat-tile value stays in ink, never the series
 // color) so each metric reads distinctly at a glance instead of as a wall
 // of identical black-on-white numbers.
-const StatTile = ({ value, icon: Icon, accent }) => (
+const StatTile = ({ value, icon: Icon, accent, delta }) => (
   <article className="metric-card widget-stat-tile">
     {Icon && (
       <span className="metric-icon-chip" style={{ '--chip-color': accent || 'var(--brand)' }}>
@@ -48,6 +63,11 @@ const StatTile = ({ value, icon: Icon, accent }) => (
       </span>
     )}
     <strong>{value}</strong>
+    {delta && (
+      <span className={`metric-card-delta ${delta.direction}`}>
+        {delta.direction === 'up' ? '▲' : '▼'} {delta.pct}% <span className="metric-card-delta-note">vs last week</span>
+      </span>
+    )}
   </article>
 );
 
@@ -181,7 +201,9 @@ export const WIDGET_LIBRARY = [
   { id: 'metric-pending-compliance', title: 'Pending compliance', size: 'sm', roles: ['admin', 'editor'], demo: false,
     render: (dashboard) => <StatTile value={dashboard.pendingCompliance ?? 0} icon={IconShield} accent="var(--c-compliance)" /> },
   { id: 'metric-total-reports', title: 'Total reports', size: 'sm', roles: ['admin', 'editor', 'viewer'], demo: false,
-    render: (dashboard) => <StatTile value={dashboard.totalReports ?? 0} icon={IconDocument} accent="var(--cat-1)" /> },
+    render: (dashboard) => (
+      <StatTile value={dashboard.totalReports ?? 0} icon={IconDocument} accent="var(--cat-1)" delta={weekOverWeekDelta(dashboard.reportsByWeek)} />
+    ) },
   { id: 'metric-distributed', title: 'Distributed to clients', size: 'sm', roles: ['admin', 'editor', 'viewer'], demo: false,
     render: (dashboard) => <StatTile value={dashboard.reportsByStatus?.distributed ?? 0} icon={IconUsers} accent="var(--c-approved)" /> },
   { id: 'pending-component-reviews', title: 'Components awaiting review', size: 'sm', roles: ['admin', 'editor'], demo: false,
@@ -191,7 +213,7 @@ export const WIDGET_LIBRARY = [
   { id: 'chart-by-team', title: 'Report volume by team', size: 'md', roles: ['admin', 'editor'], demo: false,
     render: (dashboard) => <BarChart title="By team" data={toCategoricalData(dashboard.reportsByTeam)} /> },
   { id: 'chart-by-asset-class', title: 'Report volume by asset class', size: 'md', roles: ['admin', 'viewer'], demo: false,
-    render: (dashboard) => <BarChart title="By asset class" data={toCategoricalData(dashboard.reportsByAssetClass)} /> },
+    render: (dashboard) => <DonutChart title="By asset class" centerLabel="Reports" data={toCategoricalData(dashboard.reportsByAssetClass)} /> },
   { id: 'chart-by-client', title: 'Report volume by client', size: 'md', roles: ['admin', 'editor'], demo: false,
     render: (dashboard) => <BarChart title="By client" data={toCategoricalData(dashboard.reportsByClient)} /> },
   { id: 'chart-weekly-volume', title: 'Weekly report volume', size: 'md', roles: ['admin', 'editor'], demo: false,
