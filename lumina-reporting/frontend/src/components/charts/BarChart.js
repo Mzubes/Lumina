@@ -19,8 +19,11 @@ const BarChart = ({ data, title, unitLabel = 'reports' }) => {
             onMouseLeave={() => setHoverIndex(current => (current === index ? null : current))}
           >
             <span className="bar-chart-label">{row.label}</span>
-            <div className="bar-chart-track">
-              <div className="bar-chart-bar" style={{ width: `${pct}%`, background: row.color }} />
+            <div className="bar-chart-track" style={{ background: `color-mix(in srgb, ${row.color} 8%, var(--page-bg-1))` }}>
+              <div
+                className="bar-chart-bar"
+                style={{ width: `${pct}%`, background: `linear-gradient(90deg, color-mix(in srgb, ${row.color} 62%, white), ${row.color})` }}
+              />
               {hoverIndex === index && (
                 <div className="bar-chart-tooltip" style={{ left: `${Math.min(pct, 92)}%` }}>
                   <strong>{row.label}</strong>

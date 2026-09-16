@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import BarChart from './charts/BarChart';
 import CompositionBar from './charts/CompositionBar';
+import { IconClipboard, IconDocument, IconSearch, IconShield, IconUsers } from '../icons';
 
 // The 5 legacy statuses keep their fixed named colors; anything else
 // (a firm-customized workflow step name) gets a deterministic categorical
@@ -34,9 +35,20 @@ const toCategoricalData = (rows) => (rows || []).map((row, index) => ({
 const toWeeklyData = (rows) => (rows || []).map(row => ({ label: row.label, value: row.count, color: 'var(--brand)' }));
 
 // No label span here -- the widget card's own header already shows the
-// title, so a second copy inside the body would just repeat it.
-const StatTile = ({ value }) => (
-  <article className="metric-card widget-stat-tile"><strong>{value}</strong></article>
+// title, so a second copy inside the body would just repeat it. The icon
+// chip carries the accent color (a tinted circle, not the number itself --
+// per the dataviz skill, a stat-tile value stays in ink, never the series
+// color) so each metric reads distinctly at a glance instead of as a wall
+// of identical black-on-white numbers.
+const StatTile = ({ value, icon: Icon, accent }) => (
+  <article className="metric-card widget-stat-tile">
+    {Icon && (
+      <span className="metric-icon-chip" style={{ '--chip-color': accent || 'var(--brand)' }}>
+        <Icon />
+      </span>
+    )}
+    <strong>{value}</strong>
+  </article>
 );
 
 const PIPELINE_VIEWS = [
@@ -165,15 +177,15 @@ const DemoUpcomingDeadlinesWidget = () => (
 
 export const WIDGET_LIBRARY = [
   { id: 'metric-pending-approvals', title: 'Pending approvals', size: 'sm', roles: ['admin', 'editor'], demo: false,
-    render: (dashboard) => <StatTile value={dashboard.pendingApprovals ?? 0} /> },
+    render: (dashboard) => <StatTile value={dashboard.pendingApprovals ?? 0} icon={IconClipboard} accent="var(--c-review)" /> },
   { id: 'metric-pending-compliance', title: 'Pending compliance', size: 'sm', roles: ['admin', 'editor'], demo: false,
-    render: (dashboard) => <StatTile value={dashboard.pendingCompliance ?? 0} /> },
+    render: (dashboard) => <StatTile value={dashboard.pendingCompliance ?? 0} icon={IconShield} accent="var(--c-compliance)" /> },
   { id: 'metric-total-reports', title: 'Total reports', size: 'sm', roles: ['admin', 'editor', 'viewer'], demo: false,
-    render: (dashboard) => <StatTile value={dashboard.totalReports ?? 0} /> },
+    render: (dashboard) => <StatTile value={dashboard.totalReports ?? 0} icon={IconDocument} accent="var(--cat-1)" /> },
   { id: 'metric-distributed', title: 'Distributed to clients', size: 'sm', roles: ['admin', 'editor', 'viewer'], demo: false,
-    render: (dashboard) => <StatTile value={dashboard.reportsByStatus?.distributed ?? 0} /> },
+    render: (dashboard) => <StatTile value={dashboard.reportsByStatus?.distributed ?? 0} icon={IconUsers} accent="var(--c-approved)" /> },
   { id: 'pending-component-reviews', title: 'Components awaiting review', size: 'sm', roles: ['admin', 'editor'], demo: false,
-    render: (dashboard) => <StatTile value={dashboard.pendingComponentReviews ?? 0} /> },
+    render: (dashboard) => <StatTile value={dashboard.pendingComponentReviews ?? 0} icon={IconSearch} accent="var(--cat-5)" /> },
   { id: 'chart-status-pipeline', title: 'Report volume', size: 'lg', roles: ['admin', 'editor', 'viewer'], demo: false,
     render: (dashboard) => <ReportVolumeWidget dashboard={dashboard} /> },
   { id: 'chart-by-team', title: 'Report volume by team', size: 'md', roles: ['admin', 'editor'], demo: false,

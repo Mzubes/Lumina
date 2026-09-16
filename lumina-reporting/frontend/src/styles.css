@@ -43,14 +43,20 @@
   --c-critical: #9f1239;
 
   /* categorical identity (Team/Client/Asset-class groupings) -- distinct role
-     from the status colors above */
-  --cat-1: #1d4ed8;
-  --cat-2: #b45309;
-  --cat-3: #15803d;
-  --cat-4: #a16207;
-  --cat-5: #9f1239;
-  --cat-6: #6d28d9;
-  --cat-other: var(--c-draft);
+     from the status colors above. This exact 6-hue order is validated
+     (dataviz skill's validate_palette.js against this app's white card
+     surface): all six checks pass with zero CVD warnings, worst adjacent
+     protanopia/deuteranopia ΔE 9.2 (>=8 target). The previous set (a
+     dulled-down slice of the status colors, reused for "category" duty)
+     failed the CVD check outright -- cat-4 amber and cat-3 green were only
+     ΔE 5.0 apart under protanopia, indistinguishable to a colorblind reader. */
+  --cat-1: #2a78d6; /* blue */
+  --cat-2: #eb6834; /* orange */
+  --cat-3: #1baf7a; /* aqua */
+  --cat-4: #4a3aa7; /* violet */
+  --cat-5: #e87ba4; /* magenta */
+  --cat-6: #e34948; /* red */
+  --cat-other: var(--ink-muted);
 
   /* elevation -- soft, warm-tinted shadows in place of the near-black ones a
      dark surface needed */
@@ -236,10 +242,12 @@ select { appearance: none; background-image: linear-gradient(45deg, transparent 
   border-radius: var(--radius-lg);
   padding: 22px;
   box-shadow: var(--shadow-sm);
-  transition: border-color .2s ease;
+  transition: border-color .2s ease, box-shadow .2s ease, transform .2s ease;
   overflow: hidden;
 }
 .metric-card:hover { border-color: var(--panel-border-strong); }
+.metric-card:not(.widget-stat-tile):hover { box-shadow: var(--shadow-md); transform: translateY(-1px); }
+.panel:hover { border-color: var(--panel-border-strong); }
 .metric-card span { color: var(--ink-secondary); font-size: 12.5px; font-weight: 500; }
 .metric-card strong {
   display: block; margin-top: 10px; font-family: var(--font-serif); font-size: 34px; font-weight: 500;
@@ -248,6 +256,20 @@ select { appearance: none; background-image: linear-gradient(45deg, transparent 
 .metric-card-delta { display: inline-flex; align-items: center; gap: 4px; margin-top: 8px; font-size: 12px; font-weight: 600; }
 .metric-card-delta.up { color: var(--c-approved); }
 .metric-card-delta.down { color: var(--c-critical); }
+
+/* A stat tile's accent lives in this chip (a tinted circle + solid-color
+   icon), never in the number itself -- the dataviz skill's rule that text
+   always wears ink, not the series color, applies to figures too. Each
+   metric gets a distinct hue so the row reads as several things at a
+   glance instead of a wall of identical black numbers. */
+.metric-icon-chip {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 34px; height: 34px; border-radius: 10px;
+  background: color-mix(in srgb, var(--chip-color) 14%, transparent);
+  color: var(--chip-color);
+}
+.metric-icon-chip svg { width: 17px; height: 17px; }
+.widget-stat-tile strong { margin-top: 14px; }
 
 .panel + .panel { margin-top: 20px; }
 .panel-header { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 4px; }
@@ -260,7 +282,9 @@ select { appearance: none; background-image: linear-gradient(45deg, transparent 
 .dashboard-add-widget { width: auto; }
 
 .dashboard-grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 16px; align-items: start; }
-.widget-card { margin: 0; }
+.widget-card { margin: 0; transition: border-color .2s ease, box-shadow .2s ease, transform .2s ease; }
+.widget-card:hover { box-shadow: var(--shadow-md); transform: translateY(-1px); }
+.widget-card.is-dragging:hover { transform: none; }
 .widget-size-sm { grid-column: span 2; }
 .widget-size-md { grid-column: span 3; }
 .widget-size-lg { grid-column: span 6; }
@@ -530,17 +554,18 @@ select { appearance: none; background-image: linear-gradient(45deg, transparent 
 
 /* ---------- bar chart ---------- */
 
-.bar-chart { display: flex; flex-direction: column; gap: 16px; }
-.bar-chart-row { display: grid; grid-template-columns: 92px 1fr 30px; align-items: center; gap: 14px; }
+.bar-chart { display: flex; flex-direction: column; gap: 18px; }
+.bar-chart-row { display: grid; grid-template-columns: 92px 1fr 34px; align-items: center; gap: 14px; }
 .bar-chart-label { font-size: 13px; color: var(--ink-secondary); font-weight: 500; }
 .bar-chart-track {
-  position: relative; height: 22px;
-  background: var(--page-bg-1);
+  position: relative; height: 20px;
   border-left: 2px solid var(--panel-border-strong);
-  border-radius: 0 4px 4px 0;
+  border-radius: 0 999px 999px 0;
+  overflow: hidden;
+  transition: background-color .3s ease;
 }
 .bar-chart-bar {
-  height: 100%; border-radius: 0 4px 4px 0;
+  height: 100%;
   transition: width .6s cubic-bezier(.16, 1, .3, 1);
 }
 .bar-chart-value { font-size: 13px; font-weight: 700; color: var(--ink-primary); font-variant-numeric: tabular-nums; text-align: right; }
@@ -610,10 +635,10 @@ select { appearance: none; background-image: linear-gradient(45deg, transparent 
 
 /* ---------- composition bar (part-to-whole rides on a stacked bar, not a donut) ---------- */
 .composition-bar { display: flex; flex-direction: column; gap: 14px; }
-.composition-bar-track { display: flex; height: 22px; border-radius: 6px; overflow: hidden; background: var(--page-bg-1); }
-.composition-bar-segment { position: relative; min-width: 3px; margin-right: 2px; transition: filter .15s ease; }
+.composition-bar-track { display: flex; height: 22px; border-radius: 999px; overflow: hidden; background: var(--page-bg-1); box-shadow: inset 0 1px 2px rgba(30, 26, 14, .05); }
+.composition-bar-segment { position: relative; min-width: 3px; margin-right: 2px; transition: filter .15s ease, flex-grow .5s cubic-bezier(.16, 1, .3, 1); }
 .composition-bar-segment:last-child { margin-right: 0; }
-.composition-bar-segment.is-hovered { filter: brightness(1.1); }
+.composition-bar-segment.is-hovered { filter: brightness(1.08) saturate(1.15); }
 .composition-bar-tooltip {
   position: absolute; bottom: calc(100% + 9px); left: 50%; transform: translateX(-50%);
   background: var(--ink-primary); border-radius: 9px;
