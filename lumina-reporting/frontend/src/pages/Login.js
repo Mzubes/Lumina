@@ -18,7 +18,14 @@ const Login = () => {
     try {
       const data = await apiFetch('/api/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) });
       window.localStorage.setItem('lumina_token', data.token);
-      navigate('/');
+      window.localStorage.setItem('lumina_role', data.role || '');
+      window.localStorage.setItem('lumina_email', data.email || '');
+      if (data.client_id != null) {
+        window.localStorage.setItem('lumina_client_id', data.client_id);
+      } else {
+        window.localStorage.removeItem('lumina_client_id');
+      }
+      navigate(data.role === 'client' ? '/client-portal' : '/');
     } catch (requestError) { setError(requestError.message); }
   };
 

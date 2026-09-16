@@ -17,11 +17,15 @@ const DataHub = () => {
 
   return (
     <div className="data-hub">
-      <span className="eyebrow">Connected data</span><h1>Data Hub</h1>
+      <div className="page-heading">
+        <div><span className="eyebrow">Connected data</span><h1>Data Hub</h1></div>
+        {isDemoMode && <span className="demo-badge">Demo data</span>}
+      </div>
       <div className="panel"><ul className="report-list">
         {funds.map(fund => (
           <li key={fund.id}>{fund.name} - {fund.asset_class}</li>
         ))}
+        {funds.length === 0 && <li>No funds recorded yet.</li>}
       </ul></div>
     </div>
   );

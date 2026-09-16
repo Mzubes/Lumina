@@ -3,5 +3,11 @@ Flask-Cors==4.0.1
 gunicorn==22.0.0
 fpdf2==2.7.9
 SQLAlchemy==2.0.32
-PyJWT==2.9.0
+PyJWT==2.10.1
 psycopg[binary]==3.2.1
+alembic==1.13.2
+python-pptx==1.0.2
+openpyxl==3.1.5
+requests==2.33.1
+snowflake-connector-python==4.7.3
+matplotlib==3.9.2
