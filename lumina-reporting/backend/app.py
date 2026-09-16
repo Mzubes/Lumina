@@ -8,6 +8,7 @@ from models import User, WorkflowGroup, WorkflowGroupMembership
 from roles import SYSTEM_ROLES
 from seed_demo import seed_demo
 from routes.activity import activity_blueprint
+from routes.ai_assistant import ai_blueprint
 from routes.auth import auth_blueprint
 from routes.book import book_blueprint
 from routes.clients import clients_blueprint
@@ -38,6 +39,7 @@ def create_app(test_config=None):
     }})
 
     app.register_blueprint(activity_blueprint)
+    app.register_blueprint(ai_blueprint)
     app.register_blueprint(auth_blueprint)
     app.register_blueprint(book_blueprint)
     app.register_blueprint(dashboard_blueprint)

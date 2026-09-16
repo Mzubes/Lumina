@@ -8,6 +8,7 @@ import DataSources from './components/datasources';
 import Disclosures from './components/disclosures';
 import GlobalSearch from './components/GlobalSearch';
 import InternalPortal from './components/InternalPortal';
+import LuminaAssistant from './components/LuminaAssistant';
 import Marketing from './components/marketing';
 import MyQueue from './components/MyQueue';
 import Pitchbooks from './components/pitchbooks';
@@ -151,6 +152,12 @@ function RequireAuth({ children }) {
 
 function AuthenticatedShell() {
   const [searchOpen, setSearchOpen] = useState(false);
+  // Forces a re-render on every navigation (including the post-login
+  // redirect) so this read reflects the current session -- same reasoning
+  // as Sidebar's own useLocation() call above.
+  useLocation();
+  const token = window.localStorage.getItem('lumina_token');
+  const role = window.localStorage.getItem('lumina_role');
 
   useEffect(() => {
     const handleKeyDown = (event) => {
@@ -192,6 +199,10 @@ function AuthenticatedShell() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>
+      {/* Staff-only and signed-in only -- the assistant is grounded in
+          firm-wide book/report data the backend deliberately doesn't expose
+          to the 'client' role, and there's no session to call it as before login. */}
+      {token && role !== 'client' && <LuminaAssistant />}
     </div>
   );
 }
