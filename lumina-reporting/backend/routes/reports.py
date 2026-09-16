@@ -6,7 +6,10 @@ from flask import Blueprint, Response, g, jsonify, request
 
 from database import db_session
 from logs import log_action
-from models import Client, ComponentReview, Contact, DistributionLink, FundData, Report, ReportTemplate, ReportTransition, User, WorkflowGroup
+from models import (
+    Client, ComponentReview, Contact, DistributionLink, FundData, Report, ReportStepInstance,
+    ReportTemplate, ReportTransition, User, WorkflowGroup,
+)
 from renderers import CONTENT_TYPES, RENDERERS
 from report_content import resolve_report_content, reviewable_components
 from report_generator import generate_pdf
@@ -52,6 +55,11 @@ def _serialize_report(report):
     # (done/current/skipped) after every action, not just on initial load.
     payload = report.serialize()
     payload['complianceRequired'] = requires_compliance(report)
+    # Diagram-agnostic replacement for `status === 'distributed'` -- a
+    # diagram-backed report's terminal/distribution-gate node can be named
+    # anything, so callers (ReportDetail.js's DistributionPanel gate) need
+    # this instead of comparing against the literal legacy status string.
+    payload['isDistributed'] = workflow_engine.report_is_distributed(report)
     # Empty for a legacy (non-diagram) report -- the frontend falls back to
     # ACTIONS_BY_STATUS/the plain status string for those until it's
     # migrated to render this instead.
@@ -114,6 +122,39 @@ def get_report(report_id):
     if not report:
         return jsonify({'message': 'Report not found'}), 404
     return jsonify(_serialize_report(report))
+
+@reports_blueprint.get('/api/reports/<int:report_id>/workflow')
+@require_auth(roles=['admin', 'editor', 'viewer'])
+def get_report_workflow(report_id):
+    """The report's own pinned diagram (its workflow_diagram_id), not
+    necessarily its template's current active one -- a report stays on
+    whichever version it started on even after a template's diagram is
+    later edited. null for a legacy (non-diagram) report. Powers
+    WorkflowStepper.js rendering the report's actual step graph, including
+    parallel branches, instead of the fixed 5-step linear display."""
+    report = _get_scoped_report(report_id)
+    if not report:
+        return jsonify({'message': 'Report not found'}), 404
+    diagram = workflow_engine.get_diagram(report)
+    return jsonify(diagram.serialize() if diagram else None)
+
+@reports_blueprint.get('/api/reports/<int:report_id>/steps')
+@require_auth(roles=['admin', 'editor', 'viewer'])
+def get_report_steps(report_id):
+    """Full parallel-aware step history (every ReportStepInstance row, not
+    just the currently-active ones _serialize_report's activeSteps carries)
+    -- lets WorkflowStepper.js render which of a diagram's nodes are done,
+    active, or not yet reached, including simultaneously-active parallel
+    branches. Empty for a legacy (non-diagram) report."""
+    report = _get_scoped_report(report_id)
+    if not report:
+        return jsonify({'message': 'Report not found'}), 404
+    instances = (
+        db_session.query(ReportStepInstance).filter_by(report_id=report.id)
+        .order_by(ReportStepInstance.entered_at.asc(), ReportStepInstance.id.asc())
+        .all()
+    )
+    return jsonify([instance.serialize() for instance in instances])
 
 @reports_blueprint.get('/api/reports/<int:report_id>/history')
 @require_auth(roles=['admin', 'editor', 'viewer'])
@@ -241,6 +282,15 @@ _LEGACY_ACTION_LABELS = {
     'request_changes': 'Request Changes',
 }
 
+def _legacy_compliance_group_id():
+    # role='compliance' can no longer be created (SYSTEM_ROLES dropped it in
+    # the Phase 5b cleanup) -- a template-less legacy report that reaches
+    # 'compliance' status must still be certifiable by *someone*, so the
+    # legacy branch below checks membership in this group instead of the
+    # role string it used to gate on.
+    group = db_session.query(WorkflowGroup).filter_by(name='Compliance').first()
+    return group.id if group else None
+
 def _transition_route(action, roles):
     # Auth is deliberately NOT gated by `roles` at the decorator level
     # anymore: once a report has a workflow_diagram_id, who's allowed to
@@ -257,13 +307,13 @@ def _transition_route(action, roles):
             return jsonify({'message': 'Report not found'}), 404
         data = request.get_json(silent=True) or {}
         note = data.get('note')
+        role = g.current_user.get('role')
 
         if report.workflow_diagram_id is not None:
             # Diagram-backed report: resolve this legacy verb to whichever
             # currently-eligible edge carries the matching action_label, so
             # existing per-verb call sites (ReportDetail.js) keep working
             # unmodified until they're migrated onto /transition directly.
-            role = g.current_user.get('role')
             user_id = g.current_user['user_id']
             label = _LEGACY_ACTION_LABELS[action]
             match = next(
@@ -282,8 +332,20 @@ def _transition_route(action, roles):
 
         # Legacy (non-diagram) report: the original per-verb role check,
         # just moved from the decorator into the handler so it runs
-        # alongside (not instead of) the diagram-aware branch above.
-        if g.current_user.get('role') not in roles:
+        # alongside (not instead of) the diagram-aware branch above. certify
+        # / request_changes no longer have a role to check against role=
+        # 'compliance' can't exist anymore -- those two fall through to a
+        # "Compliance" group-membership check instead (see
+        # _legacy_compliance_group_id above). No admin override here,
+        # deliberately: the original rule was that even an admin cannot
+        # self-certify a report they could also submit/approve -- that
+        # segregation-of-duties behavior is preserved as-is.
+        if action in ('certify', 'request_changes'):
+            group_id = _legacy_compliance_group_id()
+            allowed = group_id is not None and group_id in workflow_engine.group_ids_for_user(g.current_user['user_id'])
+        else:
+            allowed = role in roles
+        if not allowed:
             return jsonify({'message': 'Insufficient permissions'}), 403
         try:
             apply_transition(report, action, g.current_user['user_id'], note=note)
@@ -308,6 +370,11 @@ reports_blueprint.add_url_rule(
     '/api/reports/<int:report_id>/distribute', view_func=_transition_route('distribute', ['admin', 'editor']),
     methods=['POST'], endpoint='distribute_report',
 )
+# The `roles` arg below is vestigial for these two actions -- the legacy
+# branch special-cases 'certify'/'request_changes' onto a "Compliance"
+# group-membership check instead (role='compliance' can't be created
+# anymore). Left as ['compliance'] purely as a marker of intent; it is
+# never consulted for these two verbs.
 reports_blueprint.add_url_rule(
     '/api/reports/<int:report_id>/certify', view_func=_transition_route('certify', ['compliance']),
     methods=['POST'], endpoint='certify_report',

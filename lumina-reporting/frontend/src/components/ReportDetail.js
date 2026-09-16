@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { apiDownload, apiFetch, apiFetchBlobUrl, isDemoMode } from '../api';
+import { apiDownload, apiFetch, apiFetchBlobUrl, fireReportAction, isDemoMode } from '../api';
 import DistributionPanel from './DistributionPanel';
 import ReviewChecklistPanel from './ReviewChecklistPanel';
-import { ACTIONS_BY_STATUS, EXPORT_FORMATS, STATUS_LABEL } from './ReportsTable';
+import { EXPORT_FORMATS, getReportActions, STATUS_LABEL, StatusBadge } from './ReportsTable';
 import WorkflowStepper from './charts/WorkflowStepper';
 
 const REPORT_TYPE_LABEL = {
@@ -31,6 +31,8 @@ const ReportDetail = () => {
   const [clients, setClients] = useState([]);
   const [funds, setFunds] = useState([]);
   const [history, setHistory] = useState([]);
+  const [diagram, setDiagram] = useState(null);
+  const [steps, setSteps] = useState([]);
   const [previewUrl, setPreviewUrl] = useState(null);
   const [previewError, setPreviewError] = useState('');
   const [notFound, setNotFound] = useState(false);
@@ -46,6 +48,15 @@ const ReportDetail = () => {
   };
 
   useEffect(loadReport, [id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    // Only a diagram-backed report has a workflow/steps graph -- a legacy
+    // report's WorkflowStepper renders from status/complianceRequired alone,
+    // no fetch needed (see the diagram-less branch below).
+    if (isDemoMode || !report || !report.workflow_diagram_id) { setDiagram(null); setSteps([]); return; }
+    apiFetch(`/api/reports/${report.id}/workflow`).then(setDiagram).catch(() => setDiagram(null));
+    apiFetch(`/api/reports/${report.id}/steps`).then(setSteps).catch(() => setSteps([]));
+  }, [report?.id, report?.workflow_diagram_id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     // /api/clients is staff-only (a client user must never see the full client
@@ -90,16 +101,17 @@ const ReportDetail = () => {
   const fundName = report.fund_id
     ? (funds.find(f => f.id === report.fund_id)?.name || `Fund #${report.fund_id}`)
     : null;
-  const availableActions = (ACTIONS_BY_STATUS[report.status] || []).filter(({ roles }) => roles.includes(role));
+  const availableActions = getReportActions(report, role);
 
   const handleAction = async (action) => {
     setError('');
     try {
-      const updated = await apiFetch(`/api/reports/${report.id}/${action}`, { method: 'POST' });
+      const updated = await fireReportAction(report.id, action);
       setReport(updated);
       setFlash(`Moved to ${STATUS_LABEL[updated.status] || updated.status}`);
       setTimeout(() => setFlash(''), 4000);
       if (role !== 'client') apiFetch(`/api/reports/${report.id}/history`).then(setHistory).catch(() => {});
+      if (updated.workflow_diagram_id) apiFetch(`/api/reports/${report.id}/steps`).then(setSteps).catch(() => {});
     } catch (requestError) { setError(requestError.message); }
   };
 
@@ -121,16 +133,16 @@ const ReportDetail = () => {
           <h1>{report.title}</h1>
         </div>
         <div className="report-detail-header-actions">
-          {availableActions.map(({ action, label, tone }) => (
+          {availableActions.map((actionItem) => (
             <button
-              key={action} type={tone === 'neutral' ? undefined : 'button'}
-              className={`action-btn-lg ${tone && tone !== 'neutral' ? `action-btn tone-${tone}` : ''}`}
-              onClick={() => handleAction(action)}
+              key={actionItem.key} type={actionItem.tone === 'neutral' ? undefined : 'button'}
+              className={`action-btn-lg ${actionItem.tone && actionItem.tone !== 'neutral' ? `action-btn tone-${actionItem.tone}` : ''}`}
+              onClick={() => handleAction(actionItem)}
             >
-              {label}
+              {actionItem.label}
             </button>
           ))}
-          <span className={`status-badge status-${report.status}`}>{STATUS_LABEL[report.status] || report.status}</span>
+          <StatusBadge status={report.status} />
         </div>
       </div>
 
@@ -141,7 +153,10 @@ const ReportDetail = () => {
         <div className="report-detail-main">
           <section className="panel">
             <div className="panel-header"><h2>Workflow</h2></div>
-            <WorkflowStepper status={report.status} complianceRequired={!!report.complianceRequired} />
+            <WorkflowStepper
+              status={report.status} complianceRequired={!!report.complianceRequired}
+              diagram={diagram} steps={steps}
+            />
           </section>
 
           <section className="panel">
@@ -186,7 +201,7 @@ const ReportDetail = () => {
             <ReviewChecklistPanel reportId={report.id} role={role} />
           )}
 
-          {role !== 'client' && report.status === 'distributed' && (
+          {role !== 'client' && report.isDistributed && (
             <DistributionPanel reportId={report.id} clientId={report.client_id} role={role} />
           )}
 
@@ -199,9 +214,9 @@ const ReportDetail = () => {
                     <div className="timeline-marker" />
                     <div className="timeline-body">
                       <div className="timeline-transition">
-                        {entry.from_status && <span className={`status-badge status-${entry.from_status}`}>{STATUS_LABEL[entry.from_status] || entry.from_status}</span>}
+                        {entry.from_status && <StatusBadge status={entry.from_status} />}
                         {entry.from_status && <span className="timeline-arrow">→</span>}
-                        <span className={`status-badge status-${entry.to_status}`}>{STATUS_LABEL[entry.to_status] || entry.to_status}</span>
+                        <StatusBadge status={entry.to_status} />
                       </div>
                       <div className="timeline-meta">{entry.actor_email} · {formatDate(entry.created_at)}</div>
                       {entry.note && <div className="timeline-note">“{entry.note}”</div>}

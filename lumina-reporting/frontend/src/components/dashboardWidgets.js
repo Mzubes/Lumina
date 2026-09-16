@@ -3,6 +3,11 @@ import { Link } from 'react-router-dom';
 import BarChart from './charts/BarChart';
 import CompositionBar from './charts/CompositionBar';
 
+// The 5 legacy statuses keep their fixed named colors; anything else
+// (a firm-customized workflow step name) gets a deterministic categorical
+// color instead -- same "compute, don't hardcode" idiom as
+// ReportsTable.js's statusBreakdown, since a template's workflow diagram
+// can introduce step names this list was never written to anticipate.
 export const STATUS_ROWS = [
   { key: 'draft', label: 'Draft', color: 'var(--c-draft)' },
   { key: 'review', label: 'In review', color: 'var(--c-review)' },
@@ -10,8 +15,15 @@ export const STATUS_ROWS = [
   { key: 'approved', label: 'Approved', color: 'var(--c-approved)' },
   { key: 'distributed', label: 'Distributed', color: 'var(--c-distributed)' },
 ];
+const STATUS_ROW_KEYS = new Set(STATUS_ROWS.map(row => row.key));
 
 const CATEGORICAL_COLORS = ['var(--cat-1)', 'var(--cat-2)', 'var(--cat-3)', 'var(--cat-4)', 'var(--cat-5)', 'var(--cat-6)'];
+
+const colorForLabel = (label) => {
+  let hash = 0;
+  for (let i = 0; i < label.length; i += 1) hash = (hash * 31 + label.charCodeAt(i)) >>> 0;
+  return CATEGORICAL_COLORS[hash % CATEGORICAL_COLORS.length];
+};
 
 const toCategoricalData = (rows) => (rows || []).map((row, index) => ({
   label: row.label,
@@ -37,8 +49,22 @@ const PIPELINE_VIEWS = [
 const ReportVolumeWidget = ({ dashboard }) => {
   const [view, setView] = useState('status');
   const activeView = PIPELINE_VIEWS.find(v => v.key === view) || PIPELINE_VIEWS[0];
+  const reportsByStatus = dashboard.reportsByStatus || {};
+  // A migrated diagram reproduces the legacy words verbatim, just
+  // capitalized ('Distributed' next to a still-legacy report's lowercase
+  // 'distributed') -- match case-insensitively and sum both into the one
+  // legacy row, or they'd render as two same-labeled rows (a duplicate-key
+  // warning, and a wrong split count) instead of one correct total.
+  const countForLegacyKey = (key) => Object.entries(reportsByStatus)
+    .reduce((sum, [status, count]) => sum + (status.toLowerCase() === key ? count : 0), 0);
+  const extraStatusRows = Object.keys(reportsByStatus)
+    .filter(key => !STATUS_ROW_KEYS.has(key.toLowerCase()) && reportsByStatus[key] > 0)
+    .map(key => ({ label: key, color: colorForLabel(key), value: reportsByStatus[key] }));
   const chartData = view === 'status'
-    ? STATUS_ROWS.map(row => ({ label: row.label, color: row.color, value: dashboard.reportsByStatus?.[row.key] ?? 0 }))
+    ? [
+        ...STATUS_ROWS.map(row => ({ label: row.label, color: row.color, value: countForLegacyKey(row.key) })),
+        ...extraStatusRows,
+      ]
     : toCategoricalData(dashboard[activeView.source]);
 
   return (
@@ -68,7 +94,7 @@ const QUICK_ACTIONS = [
   // Approvals + Compliance were two separate quick actions; My Queue merges
   // them into one destination, badge count summed across both -- component
   // review counts are role-specific and not worth the added complexity here.
-  { to: '/queue', label: 'My Queue', roles: ['admin', 'editor', 'compliance'], countKeys: ['pendingApprovals', 'pendingCompliance'] },
+  { to: '/queue', label: 'My Queue', roles: ['admin', 'editor'], countKeys: ['pendingApprovals', 'pendingCompliance'] },
 ];
 
 const QuickActionsWidget = ({ dashboard, role }) => {
@@ -140,15 +166,15 @@ const DemoUpcomingDeadlinesWidget = () => (
 export const WIDGET_LIBRARY = [
   { id: 'metric-pending-approvals', title: 'Pending approvals', size: 'sm', roles: ['admin', 'editor'], demo: false,
     render: (dashboard) => <StatTile value={dashboard.pendingApprovals ?? 0} /> },
-  { id: 'metric-pending-compliance', title: 'Pending compliance', size: 'sm', roles: ['admin', 'compliance'], demo: false,
+  { id: 'metric-pending-compliance', title: 'Pending compliance', size: 'sm', roles: ['admin', 'editor'], demo: false,
     render: (dashboard) => <StatTile value={dashboard.pendingCompliance ?? 0} /> },
-  { id: 'metric-total-reports', title: 'Total reports', size: 'sm', roles: ['admin', 'editor', 'viewer', 'compliance'], demo: false,
+  { id: 'metric-total-reports', title: 'Total reports', size: 'sm', roles: ['admin', 'editor', 'viewer'], demo: false,
     render: (dashboard) => <StatTile value={dashboard.totalReports ?? 0} /> },
   { id: 'metric-distributed', title: 'Distributed to clients', size: 'sm', roles: ['admin', 'editor', 'viewer'], demo: false,
     render: (dashboard) => <StatTile value={dashboard.reportsByStatus?.distributed ?? 0} /> },
-  { id: 'pending-component-reviews', title: 'Components awaiting review', size: 'sm', roles: ['compliance', 'admin'], demo: false,
+  { id: 'pending-component-reviews', title: 'Components awaiting review', size: 'sm', roles: ['admin', 'editor'], demo: false,
     render: (dashboard) => <StatTile value={dashboard.pendingComponentReviews ?? 0} /> },
-  { id: 'chart-status-pipeline', title: 'Report volume', size: 'lg', roles: ['admin', 'editor', 'viewer', 'compliance'], demo: false,
+  { id: 'chart-status-pipeline', title: 'Report volume', size: 'lg', roles: ['admin', 'editor', 'viewer'], demo: false,
     render: (dashboard) => <ReportVolumeWidget dashboard={dashboard} /> },
   { id: 'chart-by-team', title: 'Report volume by team', size: 'md', roles: ['admin', 'editor'], demo: false,
     render: (dashboard) => <BarChart title="By team" data={toCategoricalData(dashboard.reportsByTeam)} /> },
@@ -158,17 +184,17 @@ export const WIDGET_LIBRARY = [
     render: (dashboard) => <BarChart title="By client" data={toCategoricalData(dashboard.reportsByClient)} /> },
   { id: 'chart-weekly-volume', title: 'Weekly report volume', size: 'md', roles: ['admin', 'editor'], demo: false,
     render: (dashboard) => <BarChart title="Last 8 weeks" data={toWeeklyData(dashboard.reportsByWeek)} unitLabel="reports" /> },
-  { id: 'recent-reports', title: 'Recent reports', size: 'md', roles: ['admin', 'editor', 'viewer', 'compliance'], demo: false,
+  { id: 'recent-reports', title: 'Recent reports', size: 'md', roles: ['admin', 'editor', 'viewer'], demo: false,
     render: (dashboard) => <RecentReportsWidget dashboard={dashboard} /> },
   { id: 'data-source-health', title: 'Data source health', size: 'sm', roles: ['admin', 'editor'], demo: false,
     render: (dashboard) => <DataSourceHealthWidget dashboard={dashboard} /> },
-  { id: 'quick-actions', title: 'Quick actions', size: 'sm', roles: ['admin', 'editor', 'compliance'], demo: false,
+  { id: 'quick-actions', title: 'Quick actions', size: 'sm', roles: ['admin', 'editor'], demo: false,
     render: (dashboard, role) => <QuickActionsWidget dashboard={dashboard} role={role} /> },
-  { id: 'demo-sla-turnaround', title: 'Avg. turnaround time', size: 'md', roles: ['admin', 'compliance'], demo: true,
+  { id: 'demo-sla-turnaround', title: 'Avg. turnaround time', size: 'md', roles: ['admin', 'editor'], demo: true,
     render: () => <DemoSlaTurnaroundWidget /> },
   { id: 'demo-client-engagement', title: 'Client portal engagement', size: 'md', roles: ['admin', 'editor'], demo: true,
     render: () => <DemoClientEngagementWidget /> },
-  { id: 'demo-upcoming-deadlines', title: 'Upcoming deadlines', size: 'sm', roles: ['compliance'], demo: true,
+  { id: 'demo-upcoming-deadlines', title: 'Upcoming deadlines', size: 'sm', roles: ['admin', 'editor'], demo: true,
     render: () => <DemoUpcomingDeadlinesWidget /> },
 ];
 
@@ -186,10 +212,6 @@ export const DEFAULT_LAYOUT = {
   viewer: [
     'metric-total-reports', 'metric-distributed',
     'chart-status-pipeline', 'chart-by-asset-class', 'recent-reports',
-  ],
-  compliance: [
-    'metric-pending-compliance', 'pending-component-reviews',
-    'chart-status-pipeline', 'quick-actions', 'demo-upcoming-deadlines', 'recent-reports',
   ],
 };
 

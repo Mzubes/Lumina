@@ -28,6 +28,26 @@ export async function publicFetch(path) {
 // own native viewer, so this needs no PDF-viewer library. Caller owns the
 // URL and must revoke it once done (e.g. on unmount or before fetching a
 // fresh one) to avoid leaking memory.
+// Fires a report workflow action -- either a diagram edge (generic
+// /transition endpoint, action.edgeId) or a legacy fixed verb (one of the
+// six original per-status routes, action.verb as its URL segment, e.g.
+// 'request-changes'). ReportsTable.js's getReportActions decides which
+// shape a given report/action needs; callers (reports.js, MyQueue.js,
+// ReportDetail.js) just pass along whatever it returned so the edge-vs-verb
+// branching lives in exactly one place.
+export async function fireReportAction(reportId, action, note) {
+  if (action.kind === 'edge') {
+    return apiFetch(`/api/reports/${reportId}/transition`, {
+      method: 'POST',
+      body: JSON.stringify(note ? { edge_id: action.edgeId, note } : { edge_id: action.edgeId }),
+    });
+  }
+  return apiFetch(`/api/reports/${reportId}/${action.verb}`, {
+    method: 'POST',
+    body: JSON.stringify(note ? { note } : {}),
+  });
+}
+
 export async function apiFetchBlobUrl(path) {
   if (isDemoMode) throw new Error('API is not configured');
   const token = window.localStorage.getItem('lumina_token');

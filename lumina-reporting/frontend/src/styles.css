@@ -409,6 +409,13 @@ select { appearance: none; background-image: linear-gradient(45deg, transparent 
 .status-compliance { background: #ede6fa; color: var(--c-compliance); }
 .status-compliance::before { background: var(--c-compliance); }
 
+/* A diagram-backed report's status is a firm-defined step name, not one of
+   the 5 legacy words above -- colored from the --status-color custom
+   property (computed client-side, see ReportsTable.js's colorForStatus)
+   instead of a dedicated class per possible name. */
+.status-badge-generic { background: color-mix(in srgb, var(--status-color) 16%, transparent); color: var(--status-color); }
+.status-badge-generic::before { background: var(--status-color); }
+
 /* ---------- forms ---------- */
 
 .panel form label { display: block; margin: 10px 0 4px; font-size: 12.5px; font-weight: 500; color: var(--ink-secondary); }
@@ -647,6 +654,17 @@ select { appearance: none; background-image: linear-gradient(45deg, transparent 
 .stepper-connector { flex: 1; height: 2px; margin: 14px -6px 0; background: var(--panel-border); transition: background-color .3s ease; }
 .stepper-connector.is-done { background: var(--brand); }
 .stepper-connector.is-skipped { background: none; border-top: 2px dashed var(--panel-border-strong); height: 0; }
+
+/* A diagram column holding more than one node is a parallel-branch group --
+   AND-join semantics mean every row here must complete before the workflow
+   moves past this column, so a bracket makes that "all of these" grouping
+   visible rather than just stacking steps with no indication they're a set. */
+.stepper-column { display: flex; flex-direction: column; gap: 14px; justify-content: center; }
+.stepper-column.is-parallel { position: relative; padding-left: 14px; gap: 20px; }
+.stepper-column.is-parallel::before {
+  content: ''; position: absolute; left: 0; top: 15px; bottom: 15px; width: 8px;
+  border: 2px solid var(--panel-border-strong); border-right: none; border-radius: 8px 0 0 8px;
+}
 
 /* ---------- report detail ---------- */
 .back-link { background: transparent; border: 0; color: var(--ink-secondary); font-size: 13px; padding: 0; margin-bottom: 16px; cursor: pointer; }

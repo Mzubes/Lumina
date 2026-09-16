@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { apiDownload, apiFetch, isDemoMode } from '../api';
+import { apiDownload, apiFetch, fireReportAction, isDemoMode } from '../api';
 import ReportsTable, { statusBreakdown } from './ReportsTable';
 import CompositionBar from './charts/CompositionBar';
 
@@ -83,7 +83,7 @@ const Pitchbooks = () => {
   const handleAction = async (report, action) => {
     setError('');
     try {
-      await apiFetch(`/api/reports/${report.id}/${action}`, { method: 'POST' });
+      await fireReportAction(report.id, action);
       loadReports();
     } catch (requestError) { setError(requestError.message); }
   };

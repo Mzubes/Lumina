@@ -85,6 +85,25 @@ def test_request_changes_returns_to_draft(client, editor_headers, auth_headers, 
     assert history[-1]['to_status'] == 'Draft'
     assert history[-1]['note'] == 'Fix the disclosures'
 
+def test_compliance_group_member_can_certify_legacy_report(client, auth_headers, compliance_headers, sample_client):
+    # Template-less report -- pin_to_active_diagram never fires (no
+    # template_id to look a diagram up by), so this stays on the pure legacy
+    # engine forever. role='compliance' can no longer be created, so the
+    # legacy certify/request-changes branch must authorize via "Compliance"
+    # WorkflowGroup membership instead (see _legacy_compliance_group_id in
+    # routes/reports.py) -- this is the report-status-string half of that
+    # fix; test_migrate_workflow_diagrams.py covers the group getting
+    # created for a pre-existing role='compliance' user.
+    report = _create_report(client, auth_headers, sample_client, report_type='pitchbook')
+    report_id = report['id']
+    client.post(f'/api/reports/{report_id}/submit', headers=auth_headers)
+    approved = client.post(f'/api/reports/{report_id}/approve', headers=auth_headers)
+    assert approved.get_json()['status'] == 'compliance'
+
+    certified = client.post(f'/api/reports/{report_id}/certify', headers=compliance_headers)
+    assert certified.status_code == 200
+    assert certified.get_json()['status'] == 'approved'
+
 def test_admin_cannot_certify(client, auth_headers, sample_client):
     report = _create_report(client, auth_headers, sample_client, report_type='pitchbook')
     report_id = report['id']

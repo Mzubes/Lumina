@@ -86,7 +86,12 @@ def get_dashboard():
     status_counts = dict(
         db_session.query(Report.status, func.count(Report.id)).group_by(Report.status).all()
     )
+    # The 5 legacy keys are always present (even at 0, for stable chart
+    # rendering); a firm-customized workflow step introduces additional keys
+    # this dict was never written to anticipate -- keep those too rather
+    # than silently dropping their counts.
     reports_by_status = {status: status_counts.get(status, 0) for status in REPORT_STATUSES}
+    reports_by_status.update({status: count for status, count in status_counts.items() if status not in REPORT_STATUSES})
 
     team_rows = db_session.query(Report.team, func.count(Report.id)).group_by(Report.team).all()
     asset_class_rows = (

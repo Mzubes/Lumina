@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { apiDownload, apiFetch, isDemoMode } from '../api';
-import ReportsTable, { ACTIONS_BY_STATUS, ACTION_DEFS, statusBreakdown } from './ReportsTable';
+import { apiDownload, apiFetch, fireReportAction, isDemoMode } from '../api';
+import ReportsTable, { getReportActions, statusBreakdown } from './ReportsTable';
 import CompositionBar from './charts/CompositionBar';
 
 const demoReports = [
@@ -126,24 +126,26 @@ const Reports = () => {
 
   const selectedReports = reports.filter(r => selectedIds.has(r.id));
   // A bulk action only makes sense when every selected report can legally
-  // take it right now -- intersect each selected report's available action
-  // names rather than requiring identical status, so a mixed selection still
-  // offers whatever they genuinely share.
-  const actionNamesFor = (status) => (ACTIONS_BY_STATUS[status] || []).filter(a => a.roles.includes(role)).map(a => a.action);
-  const commonActionNames = selectedReports.length === 0 ? [] : selectedReports
-    .map(r => actionNamesFor(r.status))
-    .reduce((acc, names) => acc.filter(name => names.includes(name)));
+  // take it right now -- intersect by label (not by getReportActions' raw
+  // key) since a diagram-backed report's key is an edge_id, which is only
+  // meaningful on its own diagram, while "Submit" as a concept can be common
+  // across a mixed legacy/diagram-backed selection.
+  const actionsFor = (report) => getReportActions(report, role);
+  const commonLabels = selectedReports.length === 0 ? [] : selectedReports
+    .map(r => actionsFor(r).map(a => a.label))
+    .reduce((acc, labels) => acc.filter(label => labels.includes(label)));
+  const toneForLabel = (label) => actionsFor(selectedReports[0]).find(a => a.label === label)?.tone;
 
-  const handleBulkAction = async (action) => {
+  const handleBulkAction = async (label) => {
     setBulkMessage('');
     const results = await Promise.allSettled(
-      selectedReports.map(r => apiFetch(`/api/reports/${r.id}/${action}`, { method: 'POST' })),
+      selectedReports.map(r => fireReportAction(r.id, actionsFor(r).find(a => a.label === label))),
     );
     const failed = results.filter(r => r.status === 'rejected').length;
     setBulkMessage(
       failed === 0
-        ? `${ACTION_DEFS[action]?.label || action} applied to ${results.length} report${results.length === 1 ? '' : 's'}.`
-        : `${ACTION_DEFS[action]?.label || action}: ${results.length - failed} succeeded, ${failed} failed.`,
+        ? `${label} applied to ${results.length} report${results.length === 1 ? '' : 's'}.`
+        : `${label}: ${results.length - failed} succeeded, ${failed} failed.`,
     );
     setTimeout(() => setBulkMessage(''), 5000);
     setSelectedIds(new Set());
@@ -153,7 +155,7 @@ const Reports = () => {
   const handleAction = async (report, action) => {
     setError('');
     try {
-      await apiFetch(`/api/reports/${report.id}/${action}`, { method: 'POST' });
+      await fireReportAction(report.id, action);
       loadReports();
     } catch (requestError) { setError(requestError.message); }
   };
@@ -295,14 +297,14 @@ const Reports = () => {
         {selectedIds.size > 0 && (
           <div className="bulk-action-bar">
             <span>{selectedIds.size} selected</span>
-            {commonActionNames.length > 0 ? (
-              commonActionNames.map(action => (
+            {commonLabels.length > 0 ? (
+              commonLabels.map(label => (
                 <button
-                  key={action} type="button"
-                  className={ACTION_DEFS[action]?.tone && ACTION_DEFS[action].tone !== 'neutral' ? `action-btn tone-${ACTION_DEFS[action].tone}` : undefined}
-                  onClick={() => handleBulkAction(action)}
+                  key={label} type="button"
+                  className={toneForLabel(label) && toneForLabel(label) !== 'neutral' ? `action-btn tone-${toneForLabel(label)}` : undefined}
+                  onClick={() => handleBulkAction(label)}
                 >
-                  {ACTION_DEFS[action]?.label || action}
+                  {label}
                 </button>
               ))
             ) : (

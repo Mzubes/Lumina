@@ -103,6 +103,42 @@ def test_legacy_submit_verb_409s_once_no_matching_edge_is_eligible(
     response = client.post(f'/api/reports/{report_id}/submit', headers=auth_headers)
     assert response.status_code == 409
 
+def test_get_report_workflow_null_for_legacy_report(client, auth_headers, sample_client):
+    report_id = _create_report(client, auth_headers, sample_client)
+    response = client.get(f'/api/reports/{report_id}/workflow', headers=auth_headers)
+    assert response.status_code == 200
+    assert response.get_json() is None
+
+def test_get_report_workflow_returns_the_reports_own_pinned_diagram(
+    app, client, auth_headers, sample_client, sample_template,
+):
+    report_id = _create_report(client, auth_headers, sample_client)
+    diagram_id = _attach_diagram(app, sample_template, report_id)
+
+    response = client.get(f'/api/reports/{report_id}/workflow', headers=auth_headers)
+    assert response.status_code == 200
+    body = response.get_json()
+    assert body['id'] == diagram_id
+    assert {n['id'] for n in body['nodes']} == {'start', 'draft', 'published'}
+
+def test_get_report_steps_tracks_full_history_not_just_active(
+    app, client, auth_headers, sample_client, sample_template,
+):
+    report_id = _create_report(client, auth_headers, sample_client)
+    _attach_diagram(app, sample_template, report_id)
+
+    empty_or_start = client.get(f'/api/reports/{report_id}/steps', headers=auth_headers).get_json()
+    assert [s['node_id'] for s in empty_or_start] == ['start', 'draft']
+    assert empty_or_start[0]['state'] == 'done'
+    assert empty_or_start[1]['state'] == 'active'
+
+    client.post(f'/api/reports/{report_id}/submit', headers=auth_headers)
+
+    after_submit = client.get(f'/api/reports/{report_id}/steps', headers=auth_headers).get_json()
+    assert [s['node_id'] for s in after_submit] == ['start', 'draft', 'published']
+    assert after_submit[1]['state'] == 'done'
+    assert after_submit[2]['state'] == 'active'
+
 def test_distribution_gate_is_node_flag_based_not_string_based(
     app, client, auth_headers, sample_client, sample_template,
 ):

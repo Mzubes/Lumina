@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { apiFetch, isDemoMode } from '../api';
-import { ACTIONS_BY_STATUS, STATUS_LABEL } from './ReportsTable';
+import { apiFetch, fireReportAction, isDemoMode } from '../api';
+import { getReportActions, StatusBadge } from './ReportsTable';
 
 const demoQueue = [
   {
@@ -43,7 +43,7 @@ const MyQueue = () => {
   const handleAction = async (report, action) => {
     setError('');
     try {
-      await apiFetch(`/api/reports/${report.id}/${action}`, { method: 'POST' });
+      await fireReportAction(report.id, action);
       load();
     } catch (requestError) { setError(requestError.message); }
   };
@@ -63,7 +63,7 @@ const MyQueue = () => {
 
       <div className="queue-list">
         {queue.map((report) => {
-          const actions = (ACTIONS_BY_STATUS[report.status] || []).filter(({ roles }) => roles.includes(role));
+          const actions = getReportActions(report, role);
           const age = formatAge(report.updated_at);
           return (
             <section className="panel queue-card" key={report.id}>
@@ -73,19 +73,19 @@ const MyQueue = () => {
                     {report.title}
                   </Link>
                   <div className="queue-card-meta">
-                    <span className={`status-badge status-${report.status}`}>{STATUS_LABEL[report.status] || report.status}</span>
+                    <StatusBadge status={report.status} />
                     {age && <span className="queue-card-age">{age}</span>}
                   </div>
                 </div>
                 {actions.length > 0 && (
                   <div className="queue-card-actions">
-                    {actions.map(({ action, label, tone }) => (
+                    {actions.map((actionItem) => (
                       <button
-                        key={action} type={tone === 'neutral' ? undefined : 'button'}
-                        className={tone && tone !== 'neutral' ? `action-btn tone-${tone}` : undefined}
-                        onClick={() => handleAction(report, action)}
+                        key={actionItem.key} type={actionItem.tone === 'neutral' ? undefined : 'button'}
+                        className={actionItem.tone && actionItem.tone !== 'neutral' ? `action-btn tone-${actionItem.tone}` : undefined}
+                        onClick={() => handleAction(report, actionItem)}
                       >
-                        {label}
+                        {actionItem.label}
                       </button>
                     ))}
                   </div>

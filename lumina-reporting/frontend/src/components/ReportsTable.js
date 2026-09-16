@@ -1,6 +1,12 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 
+// Only ever populated for a legacy (non-diagram) report -- once a report has
+// workflow_diagram_id, its status is a denormalized display label computed
+// server-side from the diagram's own node names (already human-readable,
+// e.g. 'Draft' or a firm-custom 'Portfolio Manager Sign-off'), so this
+// lookup would have nothing useful to add. Legacy statuses stay lowercase
+// keys, which is why this map exists at all.
 export const STATUS_LABEL = {
   draft: 'Draft',
   review: 'In review',
@@ -9,6 +15,10 @@ export const STATUS_LABEL = {
   distributed: 'Distributed',
 };
 
+// Legacy (non-diagram) report action table, keyed by the lowercase status
+// key -- action is the exact URL segment (request-changes, not
+// request_changes). Diagram-backed reports never consult this: their
+// actions come from report.eligibleActions instead (see getReportActions).
 export const ACTIONS_BY_STATUS = {
   draft: [{ action: 'submit', label: 'Submit for review', roles: ['admin', 'editor'], tone: 'neutral' }],
   review: [
@@ -31,22 +41,84 @@ const STATUS_COLOR = {
   distributed: 'var(--c-distributed)',
 };
 
-// Client-side status tally for a fetched reports list, in canonical pipeline
-// order -- feeds CompositionBar without a dedicated backend endpoint.
+const CATEGORICAL_COLORS = ['var(--cat-1)', 'var(--cat-2)', 'var(--cat-3)', 'var(--cat-4)', 'var(--cat-5)', 'var(--cat-6)'];
+
+// Deterministic hash-to-categorical-color -- same idiom as
+// dashboardWidgets.js's colorForLabel, for a status/step name this table was
+// never written to anticipate (a firm-customized workflow step).
+const colorForLabel = (label) => {
+  let hash = 0;
+  for (let i = 0; i < label.length; i += 1) hash = (hash * 31 + label.charCodeAt(i)) >>> 0;
+  return CATEGORICAL_COLORS[hash % CATEGORICAL_COLORS.length];
+};
+
+// A diagram-backed report's status is already the human-readable label (its
+// current step's node name) -- the auto-generated migration diagram even
+// reuses the exact legacy words ('Draft', 'Review', ...), just capitalized,
+// so matching case-insensitively against the fixed legacy set still finds
+// the right color for those; anything else (a firm-custom step name) falls
+// back to a computed categorical color.
+const colorForStatus = (status) => STATUS_COLOR[status.toLowerCase()] || colorForLabel(status);
+
+// Client-side status tally for a fetched reports list. Legacy statuses keep
+// canonical pipeline order and their fixed labels/colors; any other status
+// value present in the list (a diagram-backed report's step name) is
+// appended after them, in first-seen order, with a computed color.
 export const statusBreakdown = (reports) => {
   const counts = reports.reduce((tally, report) => {
     tally[report.status] = (tally[report.status] || 0) + 1;
     return tally;
   }, {});
-  return Object.keys(STATUS_LABEL).map(status => ({
-    label: STATUS_LABEL[status], value: counts[status] || 0, color: STATUS_COLOR[status],
+  // A migrated diagram reproduces the legacy words verbatim, just
+  // capitalized ('Distributed' next to a still-legacy report's lowercase
+  // 'distributed') -- match case-insensitively and sum both into the one
+  // legacy row, or they'd render as two same-labeled rows (a duplicate-key
+  // warning, and a wrong split count) instead of one correct total.
+  const legacyKeys = new Set(Object.keys(STATUS_LABEL));
+  const countForLegacyKey = (key) => Object.entries(counts)
+    .reduce((sum, [status, count]) => sum + (status.toLowerCase() === key ? count : 0), 0);
+  const legacyRows = Object.keys(STATUS_LABEL).map(status => ({
+    label: STATUS_LABEL[status], value: countForLegacyKey(status), color: STATUS_COLOR[status],
   }));
+  const extraRows = Object.keys(counts)
+    .filter(status => !legacyKeys.has(status.toLowerCase()))
+    .map(status => ({ label: status, value: counts[status], color: colorForLabel(status) }));
+  return [...legacyRows, ...extraRows];
 };
 
-// Flattened action-name -> {label, tone} lookup, built from ACTIONS_BY_STATUS.
-// Action names are unique across statuses, so this is unambiguous -- used by
-// the bulk-action bar, which works with a set of action names rather than a
-// single status.
+// Best-effort tone for a diagram edge's action_label -- the diagram doesn't
+// carry a tone of its own (it's a firm-authored free-text label), so this is
+// a heuristic over common verbs, same three tones the legacy fixed table
+// used (positive/negative/neutral).
+const inferTone = (label) => {
+  const lower = label.toLowerCase();
+  if (/reject|decline|deny|return|changes/.test(lower)) return 'negative';
+  if (/approve|certify|sign.?off|confirm/.test(lower)) return 'positive';
+  return 'neutral';
+};
+
+// What can this role/user currently do on this report, in the uniform shape
+// fireReportAction (api.js) expects. Diagram-backed reports source their
+// actions from report.eligibleActions (computed server-side from workflow
+// group membership on the report's active step -- no role list to filter by
+// here, the backend already scoped it to this caller). Legacy reports keep
+// filtering the old fixed ACTIONS_BY_STATUS table by system role.
+export const getReportActions = (report, role) => {
+  if (report.workflow_diagram_id) {
+    return (report.eligibleActions || []).map(({ edge_id, label }) => ({
+      key: edge_id, label, tone: inferTone(label), kind: 'edge', edgeId: edge_id,
+    }));
+  }
+  return (ACTIONS_BY_STATUS[report.status] || [])
+    .filter(({ roles }) => roles.includes(role))
+    .map(({ action, label, tone }) => ({ key: action, label, tone, kind: 'verb', verb: action }));
+};
+
+// Flattened action-name -> {label, tone} lookup for the legacy fixed table
+// only -- used by reports.js's bulk-action bar, which intersects legacy
+// verb names across a selection. Diagram-backed reports use edge_id as their
+// action key instead, which isn't a fixed, cross-report-comparable set the
+// same way, so bulk actions stay legacy-only (see getReportActions).
 export const ACTION_DEFS = Object.values(ACTIONS_BY_STATUS)
   .flat()
   .reduce((lookup, def) => ({ ...lookup, [def.action]: def }), {});
@@ -57,6 +129,15 @@ export const EXPORT_FORMATS = [
   { value: 'xlsx', label: 'Excel' },
   { value: 'raw', label: 'Raw data (JSON)' },
 ];
+
+// Shared by this table and MyQueue.js, so both render a report's status the
+// same way regardless of whether it's one of the 5 fixed legacy words or a
+// firm-custom diagram step name.
+export const StatusBadge = ({ status }) => (
+  STATUS_COLOR[status]
+    ? <span className={`status-badge status-${status}`}>{STATUS_LABEL[status] || status}</span>
+    : <span className="status-badge status-badge-generic" style={{ '--status-color': colorForStatus(status) }}>{STATUS_LABEL[status] || status}</span>
+);
 
 // selectable/selectedIds/onToggleSelect/onToggleSelectAll are all optional --
 // only reports.js's bulk-action bar passes them, so marketing.js/pitchbooks.js
@@ -103,20 +184,18 @@ const ReportsTable = ({
             )}
           </td>
           <td>{report.client_id ? `Client #${report.client_id}` : (report.fund_id ? `Fund #${report.fund_id}` : '—')}</td>
-          <td><span className={`status-badge status-${report.status}`}>{STATUS_LABEL[report.status] || report.status}</span></td>
+          <td><StatusBadge status={report.status} /></td>
           <td>{report.created_at ? new Date(report.created_at).toLocaleDateString() : '—'}</td>
           <td className="reports-table-actions">
-            {(ACTIONS_BY_STATUS[report.status] || [])
-              .filter(({ roles }) => roles.includes(role))
-              .map(({ action, label, tone }) => (
-                <button
-                  key={action} type={tone === 'neutral' ? undefined : 'button'}
-                  className={tone && tone !== 'neutral' ? `action-btn tone-${tone}` : undefined}
-                  onClick={() => onAction(report, action)}
-                >
-                  {label}
-                </button>
-              ))}
+            {getReportActions(report, role).map((reportAction) => (
+              <button
+                key={reportAction.key} type={reportAction.tone === 'neutral' ? undefined : 'button'}
+                className={reportAction.tone && reportAction.tone !== 'neutral' ? `action-btn tone-${reportAction.tone}` : undefined}
+                onClick={() => onAction(report, reportAction)}
+              >
+                {reportAction.label}
+              </button>
+            ))}
           </td>
           {onExport && (
             <td>
