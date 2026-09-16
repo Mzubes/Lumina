@@ -1,0 +1,48 @@
+services:
+  - type: web
+    name: lumina-api
+    runtime: python
+    plan: free
+    rootDir: lumina-reporting/backend
+    # seed-demo is idempotent (it checks for its own data and no-ops if
+    # already present), so it's safe to run on every deploy -- the free
+    # compute plan has no Shell access to run it by hand.
+    buildCommand: pip install -r requirements.txt && alembic upgrade head && flask --app app seed-demo
+    startCommand: gunicorn app:app
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      - key: SECRET_KEY
+        generateValue: true
+      - key: JWT_SECRET_KEY
+        generateValue: true
+      # A Render free account allows only one free-tier Postgres database
+      # total, so this isn't provisioned here -- paste a connection string
+      # from a free external Postgres (e.g. Neon) instead. See README
+      # "Deploy to Render".
+      - key: DATABASE_URL
+        sync: false
+      # Fill in once lumina-frontend has a URL (see README "Deploy to Render").
+      - key: CORS_ORIGINS
+        sync: false
+
+  - type: web
+    name: lumina-frontend
+    runtime: static
+    rootDir: lumina-reporting/frontend
+    buildCommand: npm ci && npm run build
+    staticPublishPath: build
+    envVars:
+      # Fill in once lumina-api has a URL (see README "Deploy to Render").
+      - key: REACT_APP_API_BASE_URL
+        sync: false
+      # package.json's "homepage" points at the separate GitHub Pages deploy
+      # (served under /Lumina/), which makes CRA emit asset paths like
+      # /Lumina/static/... -- wrong for Render, which serves this site at
+      # its own domain root. This overrides it for Render builds only.
+      - key: PUBLIC_URL
+        value: /
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
