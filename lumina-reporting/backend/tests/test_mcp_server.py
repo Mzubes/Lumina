@@ -72,7 +72,7 @@ async def test_tool_without_a_session_raises_auth_error(live_server):
 async def test_my_queue_runs_as_the_calling_user(live_server, editor_headers):
     with _as_token(_token(editor_headers)):
         result = await mcp_server.my_queue()
-    assert isinstance(result, list)
+    assert isinstance(result['queue'], list)
 
 async def test_my_queue_rejects_a_client_role_token(live_server, client_portal_headers):
     # /api/reports/my-queue is admin/editor/viewer only -- a client-role
@@ -106,8 +106,8 @@ async def test_get_portfolio_with_explicit_client_id_as_staff(
 
 async def test_list_reports_filters_forward_correctly(live_server, auth_headers, sample_template):
     with _as_token(_token(auth_headers)):
-        reports = await mcp_server.list_reports(status='draft')
-    assert reports == []
+        result = await mcp_server.list_reports(status='draft')
+    assert result['reports'] == []
 
 async def test_get_dashboard_summary_as_admin(live_server, auth_headers):
     with _as_token(_token(auth_headers)):
@@ -119,3 +119,17 @@ async def test_get_activity_log_rejects_client_role(live_server, client_portal_h
         with pytest.raises(mcp_server.LuminaAPIError) as excinfo:
             await mcp_server.get_activity_log()
     assert '403' in str(excinfo.value)
+
+# --- real wire serialization, not just the tool function's return value --
+
+async def test_empty_list_result_still_produces_a_content_block(live_server, editor_headers):
+    # mcp_server.my_queue() called directly (as the tests above do) skips
+    # FastMCP's own content-block conversion entirely. That conversion is
+    # exactly where a bare `[]` return used to vanish into zero content
+    # blocks -- go through mcp.call_tool() here, the same path a real MCP
+    # client hits, so this regresses if a future tool goes back to
+    # returning a bare list instead of the {key: [...]} envelope.
+    with _as_token(_token(editor_headers)):
+        blocks = await mcp_server.mcp.call_tool('my_queue', {})
+    assert len(blocks) == 1
+    assert '"queue": []' in blocks[0].text

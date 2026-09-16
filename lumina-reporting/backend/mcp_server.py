@@ -115,6 +115,16 @@ async def _get(path: str, params: dict | None = None) -> dict | list:
     return response.json()
 
 
+async def _get_list(key: str, path: str, params: dict | None = None) -> dict:
+    # FastMCP's content conversion explodes a bare returned list into one
+    # content block per item -- zero items means zero blocks, which reads
+    # to an MCP client as an empty/malformed response rather than "no
+    # results." Wrapping every list-shaped endpoint in a {key: [...]}
+    # envelope makes it serialize as a single JSON object, the same as
+    # every dict-returning tool here, empty list included.
+    return {key: await _get(path, params)}
+
+
 @mcp.tool()
 async def get_report(report_id: int) -> dict:
     """Look up a single report: its status, team, report type, template,
@@ -130,49 +140,53 @@ async def list_reports(
     report_type: str | None = None,
     client_id: int | None = None,
     q: str | None = None,
-) -> list:
-    """List reports visible to the calling user. All filters are optional
-    and combine with AND: status (e.g. 'review', 'approved'), team,
-    report_type (factsheet/marketing/performance/holdings/pitchbook/
-    meeting_pack/custom), client_id, or q (a free-text title search)."""
-    return await _get('/api/reports', {
+) -> dict:
+    """List reports visible to the calling user, as {'reports': [...]}. All
+    filters are optional and combine with AND: status (e.g. 'review',
+    'approved'), team, report_type (factsheet/marketing/performance/
+    holdings/pitchbook/meeting_pack/custom), client_id, or q (a free-text
+    title search)."""
+    return await _get_list('reports', '/api/reports', {
         'status': status, 'team': team, 'report_type': report_type,
         'client_id': client_id, 'q': q,
     })
 
 
 @mcp.tool()
-async def my_queue() -> list:
-    """Everything currently actionable by the calling user in one place --
-    the same list shown on their My Queue page -- each entry annotated
-    with why it's there (a workflow action they can take, a component
-    review pending their sign-off, or both)."""
-    return await _get('/api/reports/my-queue')
+async def my_queue() -> dict:
+    """Everything currently actionable by the calling user, as
+    {'queue': [...]} -- the same list shown on their My Queue page -- each
+    entry annotated with why it's there (a workflow action they can take,
+    a component review pending their sign-off, or both)."""
+    return await _get_list('queue', '/api/reports/my-queue')
 
 
 @mcp.tool()
-async def get_report_history(report_id: int) -> list:
-    """Full status-transition audit trail for one report: every step it
-    moved through, who moved it, and when."""
-    return await _get(f'/api/reports/{report_id}/history')
+async def get_report_history(report_id: int) -> dict:
+    """Full status-transition audit trail for one report, as
+    {'history': [...]}: every step it moved through, who moved it, and
+    when."""
+    return await _get_list('history', f'/api/reports/{report_id}/history')
 
 
 @mcp.tool()
-async def get_eligible_actions(report_id: int) -> list:
+async def get_eligible_actions(report_id: int) -> dict:
     """Which workflow actions (edges on this report's diagram) the calling
-    user is currently allowed to fire -- e.g. approve, request changes,
-    distribute -- and nothing they aren't permitted to do."""
-    return await _get(f'/api/reports/{report_id}/eligible-actions')
+    user is currently allowed to fire, as {'eligible_actions': [...]} --
+    e.g. approve, request changes, distribute -- and nothing they aren't
+    permitted to do."""
+    return await _get_list('eligible_actions', f'/api/reports/{report_id}/eligible-actions')
 
 
 @mcp.tool()
-async def get_activity_log(limit: int = 50) -> list:
-    """Firm-wide activity/audit log across every report: transitions,
-    component-review sign-offs, and distribution-link creation, merged and
-    sorted most-recent-first. Restricted to admin/editor/viewer roles by
-    the underlying API -- a client-role token will get a permission error
-    here, same as it would calling the API directly."""
-    return await _get('/api/activity', {'limit': limit})
+async def get_activity_log(limit: int = 50) -> dict:
+    """Firm-wide activity/audit log across every report, as
+    {'events': [...]}: transitions, component-review sign-offs, and
+    distribution-link creation, merged and sorted most-recent-first.
+    Restricted to admin/editor/viewer roles by the underlying API -- a
+    client-role token will get a permission error here, same as it would
+    calling the API directly."""
+    return await _get_list('events', '/api/activity', {'limit': limit})
 
 
 @mcp.tool()
