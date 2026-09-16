@@ -1,7 +1,7 @@
 import datetime
 import json
 
-from flask import Blueprint, g, jsonify, request
+from flask import Blueprint, Response, g, jsonify, request
 
 from database import db_session
 from models import Client, Disclosure, Report, ReportTemplate, TemplateClientAssignment, WorkflowGroup
@@ -76,6 +76,48 @@ def create_template():
     db_session.add(template)
     db_session.commit()
     return jsonify(template.serialize()), 201
+
+@templates_blueprint.post('/api/templates/preview')
+@require_auth(roles=['admin', 'editor'])
+def preview_template():
+    """Renders the exact PDF pipeline a real report would go through
+    (resolve_report_content -> RENDERERS['pdf']), against whatever's
+    currently in the template editor -- unsaved edits included, since the
+    whole point is seeing the real output before committing to it. Builds
+    a ReportTemplate/Report pair that's never added to db_session, so
+    nothing here touches the database; every resolver already treats a
+    missing client_id or empty dataset as "no data yet" rather than an
+    error, so a still-being-designed template with no sample client picked
+    renders fine, just with empty tables."""
+    data = request.get_json(silent=True) or {}
+    components = data.get('components') or []
+    error = validate_components(components) or _validate_disclosure_ids(data.get('disclosure_ids'))
+    if error:
+        return jsonify({'message': error}), 400
+
+    client_id = data.get('client_id')
+    if client_id is not None:
+        client = db_session.query(Client).filter_by(id=client_id).first()
+        if not client:
+            return jsonify({'message': 'client_id not found'}), 404
+
+    template = ReportTemplate(
+        name=data.get('name') or 'Preview',
+        components=json.dumps(components),
+        disclosure_ids=json.dumps(data.get('disclosure_ids')) if data.get('disclosure_ids') else None,
+        header_config=json.dumps(data.get('header_config')) if data.get('header_config') else None,
+        footer_config=json.dumps(data.get('footer_config')) if data.get('footer_config') else None,
+        theme_config=json.dumps(data.get('theme_config')) if data.get('theme_config') else None,
+        created_by=g.current_user['user_id'],
+    )
+    report = Report(
+        title=data.get('name') or 'Preview',
+        client_id=client_id,
+        fund_id=data.get('fund_id'),
+    )
+    content = resolve_report_content(report, template)
+    pdf_bytes = RENDERERS['pdf'](content)
+    return Response(pdf_bytes, mimetype='application/pdf')
 
 @templates_blueprint.put('/api/templates/<int:template_id>')
 @require_auth(roles=['admin', 'editor'])

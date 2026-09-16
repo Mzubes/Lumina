@@ -1,11 +1,11 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   DndContext, DragOverlay, KeyboardSensor, PointerSensor,
   closestCenter, pointerWithin, useDraggable, useDroppable, useSensor, useSensors,
 } from '@dnd-kit/core';
 import { SortableContext, arrayMove, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { apiFetch, isDemoMode } from '../api';
+import { apiFetch, apiPostBlobUrl, isDemoMode } from '../api';
 import { PRESETS_BY_ID, TEMPLATE_LIBRARY } from './templateLibrary';
 import WorkflowCanvas from './workflowEditor/WorkflowCanvas';
 
@@ -176,6 +176,12 @@ const Templates = () => {
   const [primaryColor, setPrimaryColor] = useState('');
   const [accentColor, setAccentColor] = useState('');
   const [logoUrl, setLogoUrl] = useState('');
+  const [previewVisible, setPreviewVisible] = useState(true);
+  const [previewClientId, setPreviewClientId] = useState('');
+  const [previewUrl, setPreviewUrl] = useState(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewError, setPreviewError] = useState('');
+  const previewUrlRef = useRef(null);
 
   const { setNodeRef: setCanvasDropRef, isOver: isCanvasOver } = useDroppable({ id: 'canvas-dropzone' });
   const sensors = useSensors(
@@ -193,6 +199,50 @@ const Templates = () => {
     loadTemplates();
     apiFetch('/api/disclosures').then(setDisclosures).catch(() => {});
     apiFetch('/api/clients').then(setClients).catch(() => {});
+  }, []);
+
+  // Live render-mode preview: the exact PDF pipeline a real report goes
+  // through, run against whatever's currently in the editor (including
+  // unsaved edits) so what you see here is what generating a report from
+  // this template will actually look like -- not a lookalike rendering of
+  // the same data. Debounced so typing a sentence of commentary doesn't
+  // fire a render per keystroke.
+  useEffect(() => {
+    if (isDemoMode || !previewVisible || components.length === 0) return undefined;
+    setPreviewLoading(true);
+    const timer = setTimeout(() => {
+      const payload = {
+        name, components: toApiComponents(components),
+        disclosure_ids: selectedDisclosureIds,
+        header_config: (headerTitle || headerSubtitle) ? { title: headerTitle, subtitle: headerSubtitle } : null,
+        footer_config: footerText ? { text: footerText } : null,
+        theme_config: (primaryColor || accentColor || logoUrl)
+          ? { primary_color: primaryColor || undefined, accent_color: accentColor || undefined, logo_url: logoUrl || undefined } : null,
+        client_id: previewClientId ? Number(previewClientId) : undefined,
+      };
+      apiPostBlobUrl('/api/templates/preview', payload).then(url => {
+        // The revoke + ref-mutation used to live inside the setPreviewUrl
+        // updater function -- React 18 StrictMode double-invokes updater
+        // functions (by design, to catch impure ones) and discards the
+        // first call's result, so that revoke fired *after* the ref had
+        // already been pointed at this same brand-new URL, revoking it
+        // before the iframe ever loaded it. An updater function must be
+        // pure; the side effects belong out here instead.
+        if (previewUrlRef.current) window.URL.revokeObjectURL(previewUrlRef.current);
+        previewUrlRef.current = url;
+        setPreviewError('');
+        setPreviewUrl(url);
+      }).catch(requestError => setPreviewError(requestError.message)).finally(() => setPreviewLoading(false));
+    }, 600);
+    return () => { clearTimeout(timer); setPreviewLoading(false); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    previewVisible, components, name, selectedDisclosureIds, headerTitle, headerSubtitle,
+    footerText, primaryColor, accentColor, logoUrl, previewClientId,
+  ]);
+
+  useEffect(() => () => {
+    if (previewUrlRef.current) window.URL.revokeObjectURL(previewUrlRef.current);
   }, []);
 
   const resetForm = () => {
@@ -581,6 +631,38 @@ const Templates = () => {
                   {components.length === 0 ? 'Drag a component here to get started' : 'Drop here to add to the end'}
                 </div>
               </div>
+
+              {previewVisible && (
+                <div className="template-preview">
+                  <div className="template-preview-head">
+                    <span className="template-preview-title">Live preview</span>
+                    <select
+                      value={previewClientId}
+                      onChange={e => setPreviewClientId(e.target.value)}
+                      className="template-preview-client-select"
+                    >
+                      <option value="">No sample client (layout only)</option>
+                      {clients.map(clientOption => (
+                        <option key={clientOption.id} value={clientOption.id}>{clientOption.name}</option>
+                      ))}
+                    </select>
+                    <button type="button" className="template-preview-collapse" onClick={() => setPreviewVisible(false)}>Hide</button>
+                  </div>
+                  <p className="field-hint">The real PDF pipeline, rendered from what's on the canvas right now -- including unsaved changes.</p>
+                  {previewLoading && <p className="field-hint template-preview-status">Rendering…</p>}
+                  {previewError && <p className="form-message">{previewError}</p>}
+                  {previewUrl ? (
+                    <iframe src={previewUrl} title="Template preview" className="template-preview-frame" />
+                  ) : (
+                    !previewLoading && <p className="field-hint">Add a section to see it rendered here.</p>
+                  )}
+                </div>
+              )}
+              {!previewVisible && (
+                <button type="button" className="template-preview-show" onClick={() => setPreviewVisible(true)}>
+                  Show live preview
+                </button>
+              )}
             </div>
 
             <DragOverlay>

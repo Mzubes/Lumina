@@ -59,6 +59,23 @@ export async function apiFetchBlobUrl(path) {
   return window.URL.createObjectURL(blob);
 }
 
+// POST body -> blob: URL. Used by the template editor's live preview, which
+// has to send the in-progress (unsaved) template state as the request body
+// rather than fetch by id, unlike apiFetchBlobUrl above.
+export async function apiPostBlobUrl(path, body) {
+  if (isDemoMode) throw new Error('API is not configured');
+  const token = window.localStorage.getItem('lumina_token');
+  const headers = { 'Content-Type': 'application/json' };
+  if (token) headers.Authorization = `Bearer ${token}`;
+  const response = await fetch(`${apiBaseUrl}${path}`, { method: 'POST', headers, body: JSON.stringify(body) });
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    throw new Error(data.message || `Request failed (${response.status})`);
+  }
+  const blob = await response.blob();
+  return window.URL.createObjectURL(blob);
+}
+
 // Same as apiFetchBlobUrl but for a public, no-auth export route.
 export async function publicFetchBlobUrl(path) {
   if (isDemoMode) throw new Error('API is not configured');

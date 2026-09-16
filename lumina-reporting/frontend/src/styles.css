@@ -535,6 +535,26 @@ select { appearance: none; background-image: linear-gradient(45deg, transparent 
 
 .template-canvas { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 10px; }
 
+.template-preview {
+  flex: 0 0 380px; display: flex; flex-direction: column; gap: 8px;
+  position: sticky; top: 12px;
+}
+.template-preview-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.template-preview-title { font-size: 12.5px; font-weight: 700; color: var(--ink-primary); }
+.template-preview-client-select {
+  flex: 1; min-width: 0; font-size: 12px; padding: 5px 8px;
+  border: 1px solid var(--panel-border); border-radius: var(--radius-sm); background: #fff;
+}
+.template-preview-collapse, .template-preview-show {
+  font-size: 11.5px; padding: 5px 10px; border: 1px solid var(--panel-border-strong);
+  border-radius: var(--radius-sm); background: #fff; color: var(--ink-muted); cursor: pointer;
+}
+.template-preview-show { align-self: flex-start; }
+.template-preview-status { color: var(--brand); }
+.template-preview-frame {
+  width: 100%; height: 760px; border: 1px solid var(--panel-border); border-radius: var(--radius-md); background: #fff;
+}
+
 .canvas-card {
   border: 1px solid var(--panel-border); border-radius: var(--radius-md); background: var(--panel-bg); overflow: hidden;
 }
@@ -986,6 +1006,8 @@ select { appearance: none; background-image: linear-gradient(45deg, transparent 
   .dashboard-toolbar { flex-direction: column; align-items: flex-start; }
   .template-builder-layout { flex-direction: column; }
   .component-library { flex: 1 1 auto; width: 100%; max-height: none; }
+  .template-preview { flex: 1 1 auto; width: 100%; position: static; }
+  .template-preview-frame { height: 480px; }
   .workflow-editor-layout { flex-direction: column; }
   .workflow-node-palette, .workflow-inspector { flex: 1 1 auto; width: 100%; }
   .workflow-canvas-wrapper { height: 420px; }
