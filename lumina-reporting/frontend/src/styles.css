@@ -106,7 +106,7 @@ a { color: inherit; text-decoration: none; }
 }
 
 h1, h2, h3 { color: var(--ink-primary); }
-h1 { font-family: var(--font-sans); margin: 6px 0 30px; font-size: clamp(26px, 3vw, 34px); font-weight: 700; letter-spacing: -.02em; }
+h1 { font-family: var(--font-sans); margin: 4px 0 18px; font-size: clamp(24px, 2.4vw, 30px); font-weight: 700; letter-spacing: -.02em; }
 h2 { font-family: var(--font-sans); font-size: 17px; margin: 0 0 16px; font-weight: 700; letter-spacing: -.01em; }
 h3 { font-family: var(--font-sans); font-size: 13px; margin: 20px 0 6px; color: var(--ink-secondary); font-weight: 600; text-transform: uppercase; letter-spacing: .07em; }
 p { color: var(--ink-secondary); }
@@ -171,7 +171,10 @@ select { appearance: none; background-image: linear-gradient(45deg, transparent 
 /* `auto` rather than a fixed 250px so the column follows .sidebar's own width,
    which is what actually animates -- transitioning grid-template-columns is far
    less reliable across browsers than transitioning a width. */
-.app-shell { min-height: 100vh; display: grid; grid-template-columns: auto 1fr; }
+/* `minmax(0, 1fr)`, not `1fr`: a bare `1fr` track has `min-width: auto`, so a
+   wide child (the template builder's fixed-width panels) forces the column
+   past the viewport and scrolls the whole page sideways. */
+.app-shell { min-height: 100vh; display: grid; grid-template-columns: auto minmax(0, 1fr); }
 
 .sidebar {
   width: 250px;
@@ -272,7 +275,7 @@ select { appearance: none; background-image: linear-gradient(45deg, transparent 
   border: 1px solid var(--panel-border-strong); border-radius: 4px; padding: 1px 5px;
 }
 
-.main-content { padding: 40px 44px 60px; max-width: 1240px; width: 100%; }
+.main-content { padding: 26px 30px 44px; max-width: 1500px; width: 100%; }
 
 .page-heading { display: flex; justify-content: space-between; align-items: end; gap: 20px; }
 .eyebrow { color: var(--brand); font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .12em; }
@@ -294,14 +297,14 @@ select { appearance: none; background-image: linear-gradient(45deg, transparent 
 
 /* ---------- surfaces ---------- */
 
-.metric-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin-bottom: 20px; }
+.metric-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin-bottom: 16px; }
 
 .metric-card, .panel {
   position: relative;
   border: 1px solid var(--panel-border);
   background: var(--panel-bg);
   border-radius: var(--radius-lg);
-  padding: 26px;
+  padding: 18px 20px;
   box-shadow: var(--shadow-sm);
   transition: border-color .2s ease, box-shadow .2s ease, transform .2s ease;
   overflow: hidden;
@@ -311,7 +314,7 @@ select { appearance: none; background-image: linear-gradient(45deg, transparent 
 .panel:hover { border-color: var(--panel-border-strong); }
 .metric-card span { color: var(--ink-secondary); font-size: 12.5px; font-weight: 500; }
 .metric-card strong {
-  display: block; margin-top: 14px; font-family: var(--font-sans); font-size: 34px; font-weight: 700;
+  display: block; margin-top: 8px; font-family: var(--font-sans); font-size: 29px; font-weight: 700;
   letter-spacing: -.02em; line-height: 1.1; color: var(--ink-primary);
 }
 .metric-card-delta { display: inline-flex; align-items: center; gap: 4px; margin-top: 10px; font-size: 12.5px; font-weight: 700; }
@@ -331,8 +334,8 @@ select { appearance: none; background-image: linear-gradient(45deg, transparent 
   color: var(--chip-color);
 }
 .metric-icon-chip svg { width: 17px; height: 17px; }
-.metric-tile-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 34px; }
-.widget-stat-tile strong { margin-top: 14px; }
+.metric-tile-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 30px; }
+.widget-stat-tile strong { margin-top: 8px; }
 /* Pill badge, not inline text -- tinted to match direction, same idiom as
    a workflow-status badge (a computed tint of the same color used for its
    text/icon), so "up" and "down" read as distinct chips at a glance. */
@@ -368,26 +371,48 @@ select { appearance: none; background-image: linear-gradient(45deg, transparent 
 .book-holdings-list li { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 13px; }
 .book-holdings-list li a { color: var(--brand); }
 
-.panel + .panel { margin-top: 20px; }
+/* Vertical stacking margin for panels laid out in normal flow. */
+.panel + .panel { margin-top: 14px; }
+/* ...but never inside a gap-based container, which already spaces its own
+   children. `.panel + .panel` (two classes) outranks the `margin: 0` on
+   `.widget-card`/`.queue-card` (one class), so every card after the first was
+   silently picking up a stray top margin -- offsetting it against its row and
+   making the grid look misaligned. These selectors win on specificity. */
+.dashboard-grid > .panel + .panel,
+.queue-list > .panel + .panel { margin-top: 0; }
 .panel-header { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 4px; }
 .panel-header h2 { margin: 0; }
 .panel-subtitle { color: var(--ink-muted); font-size: 12.5px; margin: 0 0 20px; }
 
 /* ---------- dashboard widget grid ---------- */
-.dashboard-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin: 4px 0 18px; }
+.dashboard-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin: 0 0 14px; }
 .dashboard-toolbar .panel-subtitle { margin: 0; }
 .dashboard-add-widget { width: auto; }
 
-.dashboard-grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 16px; align-items: start; }
-.widget-card { margin: 0; transition: border-color .2s ease, box-shadow .2s ease, transform .2s ease; }
+/* 12 columns, not 6. On a 6-col grid the sizes didn't tile: four span-2
+   stat tiles left one orphaned on its own row with 4 empty columns, and a
+   span-2 next to a span-3 left a dead 1-column gutter on every row after.
+   At 12, sm/md/lg (3/6/12) all divide evenly -- 4 tiles, 2 halves, or one
+   full-width row -- so rows fill completely.
+   No `align-items: start`: that let cards in the same row end at different
+   heights, which is what made the grid look ragged. Stretch is what keeps
+   every card in a row bottom-aligned. */
+.dashboard-grid { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 14px; }
+.widget-card { margin: 0; display: flex; flex-direction: column; transition: border-color .2s ease, box-shadow .2s ease, transform .2s ease; }
 .widget-card:hover { box-shadow: var(--shadow-md); transform: translateY(-1px); }
 .widget-card.is-dragging:hover { transform: none; }
-.widget-size-sm { grid-column: span 2; }
-.widget-size-md { grid-column: span 3; }
-.widget-size-lg { grid-column: span 6; }
+.widget-size-sm { grid-column: span 3; }
+.widget-size-md { grid-column: span 6; }
+.widget-size-lg { grid-column: span 12; }
 
-.widget-card-header { align-items: center; margin-bottom: 18px; }
+.widget-card-header { align-items: center; margin-bottom: 14px; }
 .widget-card-header h2 { flex: 1; font-size: 15px; }
+/* Both controls sit to the right of the title. They're invisible until hover
+   but still occupy layout, and leading the row with the drag handle indented
+   every widget title ~33px away from the card's own left edge -- so titles
+   never lined up with the figures and chart axes directly beneath them. */
+.widget-drag-handle { order: 1; }
+.widget-hide-btn { order: 2; }
 .widget-card-header .demo-badge { margin-bottom: 0; padding: 3px 9px 3px 8px; font-size: 11px; flex-shrink: 0; }
 /* Quiet by default -- every reference dashboard shows zero admin chrome in
    its resting state. The drag/hide controls are a real feature (this is a
@@ -411,7 +436,17 @@ select { appearance: none; background-image: linear-gradient(45deg, transparent 
 .widget-card.is-dragging { box-shadow: var(--shadow-lg); z-index: 5; }
 .widget-card.is-dragging .widget-drag-handle { opacity: 1; }
 
-.widget-stat-tile.metric-card { border: none; box-shadow: none; padding: 0; background: transparent; }
+.widget-stat-tile.metric-card {
+  border: none; box-shadow: none; padding: 0; background: transparent;
+  flex: 1; display: flex; flex-direction: column;
+}
+/* At a quarter-row wide some stat titles wrap to two lines ("Distributed to
+   clients") and others don't ("Total reports"). Reserving two lines keeps
+   every icon chip on the same baseline across the row, and anchoring the
+   figure to the bottom keeps every number on one line too, however the
+   title happens to break. */
+.widget-size-sm .widget-card-header h2 { line-height: 1.3; min-height: 2.6em; }
+.widget-stat-tile strong { margin-top: auto; padding-top: 8px; }
 
 .widget-demo-stat strong {
   display: block; font-family: var(--font-sans); font-size: 30px; font-weight: 700; letter-spacing: -.02em;

@@ -225,32 +225,43 @@ export const WIDGET_LIBRARY = [
     render: (dashboard) => <AreaChart title="Last 8 weeks" data={toWeeklyData(dashboard.reportsByWeek)} /> },
   { id: 'recent-reports', title: 'Recent reports', size: 'md', roles: ['admin', 'editor', 'viewer'], demo: false,
     render: (dashboard) => <RecentReportsWidget dashboard={dashboard} /> },
-  { id: 'data-source-health', title: 'Data source health', size: 'sm', roles: ['admin', 'editor'], demo: false,
+  // 'sm' is the stat-tile width (a quarter row). These two are list/button
+  // panels whose content needs a half row to breathe -- at 'sm' they left a
+  // dead gutter beside every chart they sat next to.
+  { id: 'data-source-health', title: 'Data source health', size: 'md', roles: ['admin', 'editor'], demo: false,
     render: (dashboard) => <DataSourceHealthWidget dashboard={dashboard} /> },
-  { id: 'quick-actions', title: 'Quick actions', size: 'sm', roles: ['admin', 'editor'], demo: false,
+  { id: 'quick-actions', title: 'Quick actions', size: 'md', roles: ['admin', 'editor'], demo: false,
     render: (dashboard, role) => <QuickActionsWidget dashboard={dashboard} role={role} /> },
   { id: 'demo-sla-turnaround', title: 'Avg. turnaround time', size: 'md', roles: ['admin', 'editor'], demo: true,
     render: () => <DemoSlaTurnaroundWidget /> },
   { id: 'demo-client-engagement', title: 'Client portal engagement', size: 'md', roles: ['admin', 'editor'], demo: true,
     render: () => <DemoClientEngagementWidget /> },
-  { id: 'demo-upcoming-deadlines', title: 'Upcoming deadlines', size: 'sm', roles: ['admin', 'editor'], demo: true,
+  { id: 'demo-upcoming-deadlines', title: 'Upcoming deadlines', size: 'md', roles: ['admin', 'editor'], demo: true,
     render: () => <DemoUpcomingDeadlinesWidget /> },
 ];
 
 export const WIDGETS_BY_ID = Object.fromEntries(WIDGET_LIBRARY.map(widget => [widget.id, widget]));
 
+// Ordered so each row tiles completely against the 12-column grid: four
+// quarter-width stat tiles, then a full-width chart, then half-width pairs.
+// A layout that leaves a half row empty reads as a broken grid, not as
+// breathing room.
 export const DEFAULT_LAYOUT = {
   admin: [
     'metric-pending-approvals', 'metric-pending-compliance', 'metric-total-reports', 'metric-distributed',
-    'chart-status-pipeline', 'quick-actions', 'chart-by-team', 'recent-reports',
+    'chart-status-pipeline', 'quick-actions', 'chart-by-team', 'recent-reports', 'data-source-health',
   ],
   editor: [
-    'metric-pending-approvals', 'metric-total-reports', 'metric-distributed',
-    'chart-status-pipeline', 'quick-actions', 'chart-by-client', 'recent-reports',
+    'metric-pending-approvals', 'metric-total-reports', 'metric-distributed', 'pending-component-reviews',
+    'chart-status-pipeline', 'quick-actions', 'chart-by-client', 'recent-reports', 'data-source-health',
   ],
+  // A viewer can only see five widgets, which is 2.5 rows' worth -- one row
+  // is unavoidably partial. Ordered so the two stat tiles share a full row
+  // with a half-width chart and the partial row falls last, where a gap is
+  // least conspicuous, rather than first.
   viewer: [
-    'metric-total-reports', 'metric-distributed',
-    'chart-status-pipeline', 'chart-by-asset-class', 'recent-reports',
+    'metric-total-reports', 'metric-distributed', 'chart-by-asset-class',
+    'chart-status-pipeline', 'recent-reports',
   ],
 };
 
