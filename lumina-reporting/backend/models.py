@@ -73,10 +73,23 @@ class Client(Base):
     id = Column(Integer, primary_key=True)
     name = Column(String(150), nullable=False)
     contact_email = Column(String(100))
+    # The relationship manager who owns this relationship. Nullable: a client
+    # can exist before anyone is assigned, and every client that predates this
+    # column has no owner rather than a fabricated one.
+    relationship_manager_id = Column(Integer, ForeignKey('users.id'), nullable=True)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
     def serialize(self):
-        return {"id": self.id, "name": self.name, "contact_email": self.contact_email}
+        # Deliberately only the id -- resolving it to a name is a join, and
+        # every other serialize() in this file stays join-free. The route
+        # layer resolves it, the same way routes/activity.py resolves
+        # actor_email.
+        return {
+            "id": self.id,
+            "name": self.name,
+            "contact_email": self.contact_email,
+            "relationship_manager_id": self.relationship_manager_id,
+        }
 
 class Contact(Base):
     __tablename__ = 'contacts'
@@ -116,6 +129,13 @@ class Report(Base):
     # for where a report actually is (it supports multiple simultaneously
     # active nodes for parallel branches; a single string can't).
     status = Column(String(60), nullable=False, default='draft')
+    # The delivery deadline this report is held to. Nullable because not every
+    # report has one (an ad-hoc `custom` report may never be due), and because
+    # nothing existing can supply it -- a creation date isn't a deadline, and a
+    # workflow diagram's nodes carry no target duration. "Overdue" and "SLA
+    # breached" are meaningless without this, so it has to be captured, not
+    # derived.
+    due_date = Column(Date, nullable=True)
     file_path = Column(String(255))
     workflow_diagram_id = Column(Integer, ForeignKey('workflow_diagrams.id'), nullable=True)
     created_by = Column(Integer, ForeignKey('users.id'), nullable=False)
@@ -132,6 +152,7 @@ class Report(Base):
             "team": self.team,
             "report_type": self.report_type,
             "status": self.status,
+            "due_date": self.due_date.isoformat() if self.due_date else None,
             "file_path": self.file_path,
             "workflow_diagram_id": self.workflow_diagram_id,
             "created_by": self.created_by,

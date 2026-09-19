@@ -85,3 +85,32 @@ def test_activity_sorted_newest_first_and_respects_limit(client, editor_headers,
     limited = client.get('/api/activity?limit=1', headers=auth_headers).get_json()
     assert len(limited) == 1
     assert limited[0] == body[0]
+
+def test_every_activity_event_carries_a_unique_reference(client, editor_headers, auth_headers, sample_client):
+    template = _create_template(client, editor_headers)
+    report = _create_templated_report(client, auth_headers, sample_client, template['id'])
+    client.post(f"/api/reports/{report['id']}/submit", headers=auth_headers)
+    client.post(f"/api/reports/{report['id']}/approve", headers=auth_headers)
+    client.post(f"/api/reports/{report['id']}/distribute", headers=auth_headers)
+    client.post(f"/api/reports/{report['id']}/distribution-links", headers=auth_headers, json={})
+
+    body = client.get('/api/activity', headers=auth_headers).get_json()
+    references = [event['reference'] for event in body]
+
+    assert all(reference.startswith('REF-') for reference in references)
+    # Ids only count within their own table, so the per-source letter is what
+    # keeps a transition and a distribution link from colliding on REF-1.
+    assert len(set(references)) == len(references)
+
+    prefixes = {event['type']: event['reference'][4] for event in body}
+    assert prefixes['transition'] == 'T'
+    assert prefixes['distribution_link'] == 'D'
+
+def test_reference_is_stable_across_requests(client, editor_headers, auth_headers, sample_client):
+    template = _create_template(client, editor_headers)
+    report = _create_templated_report(client, auth_headers, sample_client, template['id'])
+    client.post(f"/api/reports/{report['id']}/submit", headers=auth_headers)
+
+    first = client.get('/api/activity', headers=auth_headers).get_json()
+    second = client.get('/api/activity', headers=auth_headers).get_json()
+    assert [e['reference'] for e in first] == [e['reference'] for e in second]

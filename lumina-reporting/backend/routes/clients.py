@@ -12,6 +12,19 @@ def _get_client_or_404(client_id):
 def _get_contact_or_404(client_id, contact_id):
     return db_session.query(Contact).filter_by(id=contact_id, client_id=client_id).first()
 
+def _validate_relationship_manager(raw_id):
+    """-> (value, error). Explicit null clears the assignment. A client-portal
+    user can't own a relationship -- they're the other side of it -- so only
+    staff accounts are accepted."""
+    if raw_id is None:
+        return None, None
+    user = db_session.query(User).filter_by(id=raw_id).first()
+    if not user:
+        return None, 'relationship_manager_id must reference an existing user'
+    if user.role == 'client':
+        return None, 'A client-portal user cannot be a relationship manager'
+    return user.id, None
+
 @clients_blueprint.get('/api/clients')
 @require_auth(roles=['admin', 'editor', 'viewer'])
 def list_clients():
@@ -34,7 +47,14 @@ def create_client():
     if not name:
         return jsonify({'message': 'name is required'}), 400
 
-    client = Client(name=name, contact_email=data.get('contact_email') or None)
+    manager_id, error = _validate_relationship_manager(data.get('relationship_manager_id'))
+    if error:
+        return jsonify({'message': error}), 400
+
+    client = Client(
+        name=name, contact_email=data.get('contact_email') or None,
+        relationship_manager_id=manager_id,
+    )
     db_session.add(client)
     db_session.commit()
     return jsonify(client.serialize()), 201
@@ -53,6 +73,12 @@ def update_client(client_id):
 
     client.name = name
     client.contact_email = data.get('contact_email', client.contact_email)
+    # Absent key leaves the assignment alone; an explicit null clears it.
+    if 'relationship_manager_id' in data:
+        manager_id, error = _validate_relationship_manager(data['relationship_manager_id'])
+        if error:
+            return jsonify({'message': error}), 400
+        client.relationship_manager_id = manager_id
     db_session.commit()
     return jsonify(client.serialize())
 

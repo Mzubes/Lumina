@@ -10,6 +10,16 @@ activity_blueprint = Blueprint('activity', __name__)
 DEFAULT_LIMIT = 100
 MAX_LIMIT = 500
 
+# Audit reference, derived rather than stored. Every event already has a
+# stable identity (its own table + primary key); a stored column would need a
+# migration and a backfill across three tables to say exactly the same thing,
+# and could then drift out of sync. One letter per source keeps references
+# unique across tables, since ids only count within their own.
+REFERENCE_PREFIXES = {'transition': 'T', 'component_review': 'C', 'distribution_link': 'D'}
+
+def reference_for(event_type, row_id):
+    return f"REF-{REFERENCE_PREFIXES[event_type]}{row_id}"
+
 def _transition_events(per_type_limit):
     rows = (
         db_session.query(ReportTransition, Report, User.email)
@@ -22,6 +32,7 @@ def _transition_events(per_type_limit):
     return [
         {
             'type': 'transition',
+            'reference': reference_for('transition', transition.id),
             'created_at': transition.created_at.isoformat() if transition.created_at else None,
             'actor_email': actor_email,
             'report_id': report.id,
@@ -47,6 +58,7 @@ def _component_review_events(per_type_limit):
         title = next((c.get('title') for c in components if c.get('id') == review.component_id), review.component_id)
         events.append({
             'type': 'component_review',
+            'reference': reference_for('component_review', review.id),
             'created_at': review.reviewed_at.isoformat() if review.reviewed_at else None,
             'actor_email': actor_email,
             'report_id': report.id,
@@ -68,6 +80,7 @@ def _distribution_link_events(per_type_limit):
     return [
         {
             'type': 'distribution_link',
+            'reference': reference_for('distribution_link', link.id),
             'created_at': link.created_at.isoformat() if link.created_at else None,
             'actor_email': actor_email,
             'report_id': report.id,
