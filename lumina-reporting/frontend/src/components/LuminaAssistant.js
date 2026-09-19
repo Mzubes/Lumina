@@ -10,7 +10,7 @@ const pageLabelFromPath = (pathname) => {
   const reportMatch = pathname.match(/^\/reports\/(\d+)$/);
   if (reportMatch) return { label: 'Report Detail', reportId: Number(reportMatch[1]) };
   const labels = {
-    '/': 'Dashboard', '/data-hub': 'Data Hub', '/data-sources': 'Data Sources',
+    '/': 'Production Hub', '/data-hub': 'Data Hub', '/data-sources': 'Data Sources',
     '/templates': 'Templates', '/reports': 'Reports', '/queue': 'My Queue',
     '/marketing': 'Fact Sheets & Marketing', '/pitch-books': 'Pitch Books & Meeting Packs',
     '/clients': 'Clients & Contacts', '/disclosures': 'Disclosures', '/activity': 'Activity Log',

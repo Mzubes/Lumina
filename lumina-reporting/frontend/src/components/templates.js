@@ -492,7 +492,7 @@ const Templates = () => {
               <p className="field-hint">Colors the PDF's header banner, section titles, table headers, and any charts. Leave blank for a plain, colorless document.</p>
               <div className="theme-fields-row">
                 <label>Primary color
-                  <input type="color" value={primaryColor || '#0d6b5f'} onChange={e => setPrimaryColor(e.target.value)} />
+                  <input type="color" value={primaryColor || '#1447E6'} onChange={e => setPrimaryColor(e.target.value)} />
                 </label>
                 <label>Accent color
                   <input type="color" value={accentColor || '#c9bd9a'} onChange={e => setAccentColor(e.target.value)} />

@@ -5,6 +5,7 @@ import { SortableContext, arrayMove, rectSortingStrategy, sortableKeyboardCoordi
 import { CSS } from '@dnd-kit/utilities';
 import { apiFetch, isDemoMode } from '../api';
 import { DEFAULT_LAYOUT, WIDGETS_BY_ID, widgetsForRole } from './dashboardWidgets';
+import PageGreeting from './PageGreeting';
 
 const demoDashboard = {
   pendingApprovals: 3,
@@ -67,19 +68,8 @@ const SortableWidget = ({ id, size, title, demo, onHide, children }) => {
   );
 };
 
-// Derived from the real logged-in email's local-part (e.g. 'admin' from
-// 'admin@lumina.test') rather than a fabricated display name -- there's no
-// separate name field on User yet, and this reads naturally as a greeting
-// without inventing data.
-const displayNameFromEmail = (email) => {
-  const localPart = (email || '').split('@')[0];
-  if (!localPart) return null;
-  return localPart.charAt(0).toUpperCase() + localPart.slice(1);
-};
-
 const Dashboard = () => {
   const role = window.localStorage.getItem('lumina_role') || 'viewer';
-  const displayName = displayNameFromEmail(window.localStorage.getItem('lumina_email'));
 
   const [data, setData] = useState(null);
   // 'live' | 'demo' | 'unavailable' -- distinct from isDemoMode, so a real
@@ -123,8 +113,8 @@ const Dashboard = () => {
     <div className="dashboard">
       <div className="page-heading">
         <div>
-          <span className="eyebrow">Overview</span>
-          <h1>{displayName ? `Welcome back, ${displayName}` : 'Reporting dashboard'}</h1>
+          <PageGreeting />
+          <h1>Production Hub</h1>
         </div>
         {source === 'demo' && <span className="demo-badge">Demo data</span>}
         {source === 'unavailable' && <span className="demo-badge">Couldn't reach the API — showing sample data</span>}

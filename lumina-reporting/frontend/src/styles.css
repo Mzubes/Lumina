@@ -1,36 +1,46 @@
 :root {
   color-scheme: light;
-  --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
-  --font-serif: 'Newsreader', Georgia, 'Times New Roman', serif;
+  /* One sans family throughout -- the previous Inter/Newsreader pairing put a
+     serif on the wordmark and brand mark only, which read editorial rather
+     than institutional next to the rest of the UI. */
+  --font-sans: 'Manrope', ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
 
-  /* surfaces */
-  --page-bg-1: #f6f4ee;
-  --page-bg-2: #efece0;
+  /* surfaces -- cool off-white, not the previous warm ivory: a warm ground
+     next to the blue brand below reads muddy, the two undertones fight */
+  --page-bg-1: #f5f7fb;
+  --page-bg-2: #eef1f8;
   --panel-bg: #ffffff;
   --panel-bg-solid: #ffffff;
-  --panel-border: #eae5d8;
-  --panel-border-strong: #ddd7c8;
+  --panel-border: #e3e7f0;
+  --panel-border-strong: #d2d8e6;
   --input-bg: #ffffff;
-  --input-border: #ddd7c8;
-  --sidebar-bg: #fbfaf6;
+  --input-border: #d2d8e6;
+  --sidebar-bg: #fbfcfe;
 
-  /* ink */
+  /* ink -- unchanged; near-black on light doesn't depend on the brand hue */
   --ink-primary: #131a20;
   --ink-secondary: #5b6472;
   --ink-muted: #8b93a1;
 
   /* brand */
-  --brand: #0d6b5f;
-  --brand-strong: #0a544a;
-  --brand-ink: #f3fbf9;
-  --brand-tint: #e7f1ee;
+  --brand: #1447E6;
+  --brand-strong: #0f36b8;
+  --brand-ink: #f3f7ff;
+  --brand-tint: #eaf0ff;
 
-  /* primary button fill -- deliberately not brand-teal; teal is reserved for
+  /* Signature gradient. Deliberately used in exactly two places (the brand
+     mark and the Lumina AI button) -- a gradient on every primary surface
+     reads busy and dates quickly. Everything else takes flat --brand. */
+  --brand-gradient-start: #1447E6;
+  --brand-gradient-end: #38BDF8;
+  --brand-gradient: linear-gradient(135deg, var(--brand-gradient-start), var(--brand-gradient-end));
+
+  /* primary button fill -- deliberately not brand-blue; blue is reserved for
      accents/active states/eyebrows, a near-ink fill reads calmer and more
      institutional for the everyday "submit this form" action */
   --btn-fill: #131a20;
   --btn-fill-hover: #262f38;
-  --btn-fill-text: #f6f4ee;
+  --btn-fill-text: #f5f7fb;
 
   /* status / chart marks -- deep, saturated tones chosen for >=4.5:1 text
      contrast on a light tint of themselves, not the pale/light tones the
@@ -58,11 +68,12 @@
   --cat-6: #e34948; /* red */
   --cat-other: var(--ink-muted);
 
-  /* elevation -- soft, warm-tinted shadows in place of the near-black ones a
-     dark surface needed */
-  --shadow-sm: 0 1px 2px rgba(30, 26, 14, .05);
-  --shadow-md: 0 10px 24px rgba(30, 26, 14, .07);
-  --shadow-lg: 0 26px 60px rgba(30, 26, 14, .12);
+  /* elevation -- cool-tinted to match the surfaces above; the previous warm
+     (30,26,14) tint was picked for the ivory ground and greys out against a
+     cool one */
+  --shadow-sm: 0 1px 2px rgba(15, 23, 42, .05);
+  --shadow-md: 0 10px 24px rgba(15, 23, 42, .07);
+  --shadow-lg: 0 26px 60px rgba(15, 23, 42, .12);
 
   --radius-sm: 8px;
   --radius-md: 12px;
@@ -157,9 +168,13 @@ select { appearance: none; background-image: linear-gradient(45deg, transparent 
 
 /* ---------- shell ---------- */
 
-.app-shell { min-height: 100vh; display: grid; grid-template-columns: 250px 1fr; }
+/* `auto` rather than a fixed 250px so the column follows .sidebar's own width,
+   which is what actually animates -- transitioning grid-template-columns is far
+   less reliable across browsers than transitioning a width. */
+.app-shell { min-height: 100vh; display: grid; grid-template-columns: auto 1fr; }
 
 .sidebar {
+  width: 250px;
   padding: 26px 16px;
   border-right: 1px solid var(--panel-border);
   background: var(--sidebar-bg);
@@ -168,17 +183,56 @@ select { appearance: none; background-image: linear-gradient(45deg, transparent 
   position: sticky;
   top: 0;
   height: 100vh;
+  transition: width .2s ease, padding .2s ease;
 }
+
+/* ---------- sidebar: collapsed icon rail ---------- */
+.sidebar--collapsed { width: 72px; padding-left: 10px; padding-right: 10px; }
+/* Labels collapse to nothing rather than display:none so the width transition
+   has something to animate against and icons don't jump mid-transition. */
+.sidebar--collapsed .brand-text,
+.sidebar--collapsed .sidebar-search-kbd,
+.sidebar--collapsed nav a span,
+.sidebar--collapsed .login-link span,
+.sidebar--collapsed .sidebar-search-trigger span { display: none; }
+/* Section labels become hairline dividers rather than disappearing -- without
+   them every icon runs together in one undifferentiated column and the
+   Client Hub / Data / Production grouping is lost entirely. */
+.sidebar--collapsed .nav-section-label {
+  height: 1px; padding: 0; margin: 9px 6px; font-size: 0; overflow: hidden;
+  background: var(--panel-border);
+}
+.sidebar--collapsed .nav-section-label:first-child { margin-top: 0; }
+.sidebar--collapsed .brand-row { justify-content: center; padding: 0; }
+.sidebar--collapsed nav a,
+.sidebar--collapsed .login-link,
+.sidebar--collapsed .sidebar-search-trigger { justify-content: center; padding-left: 0; padding-right: 0; }
+.sidebar--collapsed nav { gap: 4px; }
+
+.sidebar-collapse-toggle {
+  align-self: flex-end;
+  margin: 14px 0 0;
+  padding: 4px;
+  width: 26px; height: 26px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 6px;
+  background: transparent;
+  border: 1px solid var(--panel-border);
+  color: var(--ink-muted);
+}
+.sidebar-collapse-toggle:hover { background: var(--page-bg-1); color: var(--ink-primary); }
+.sidebar-collapse-toggle svg { width: 15px; height: 15px; }
+.sidebar--collapsed .sidebar-collapse-toggle { align-self: center; }
 
 .brand-row { display: flex; align-items: center; gap: 10px; padding: 0 8px; }
 .brand-mark {
   width: 34px; height: 34px; border-radius: 9px; flex-shrink: 0;
   display: grid; place-items: center;
-  background: var(--brand);
-  color: var(--brand-ink); font-family: var(--font-serif); font-weight: 600; font-size: 16px; letter-spacing: -.01em;
+  background: var(--brand-gradient);
+  color: var(--brand-ink); font-weight: 700; font-size: 16px; letter-spacing: -.01em;
   box-shadow: 0 6px 14px color-mix(in srgb, var(--brand) 28%, transparent);
 }
-.brand { font-family: var(--font-serif); font-size: 19px; font-weight: 600; letter-spacing: -.01em; color: var(--ink-primary); line-height: 1.1; }
+.brand { font-size: 19px; font-weight: 700; letter-spacing: -.02em; color: var(--ink-primary); line-height: 1.1; }
 .brand-subtitle { margin: 2px 0 0; color: var(--ink-muted); font-size: 10.5px; letter-spacing: .05em; text-transform: uppercase; }
 
 .sidebar nav { display: grid; gap: 2px; margin-top: 26px; }
@@ -222,6 +276,13 @@ select { appearance: none; background-image: linear-gradient(45deg, transparent 
 
 .page-heading { display: flex; justify-content: space-between; align-items: end; gap: 20px; }
 .eyebrow { color: var(--brand); font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .12em; }
+
+/* Small "who and when" line above a page's <h1>. Sits in the slot .eyebrow
+   used to occupy on pages that show it, so the h1 keeps its own margin. */
+.page-greeting { font-size: 12.5px; font-weight: 600; color: var(--ink-secondary); }
+.page-greeting-date { color: var(--ink-muted); font-weight: 500; }
+.page-greeting--hero { text-align: center; }
+.page-greeting--hero h1 { margin: 0 0 8px; font-size: clamp(28px, 4vw, 40px); }
 .demo-badge {
   display: inline-flex; align-items: center; gap: 6px;
   margin-bottom: 28px; padding: 6px 12px 6px 10px; border-radius: 999px;
@@ -713,7 +774,7 @@ select { appearance: none; background-image: linear-gradient(45deg, transparent 
 }
 
 /* ---------- sidebar section labels ---------- */
-.nav-section-label { grid-column: 1 / -1; padding: 14px 10px 6px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .1em; color: #a39c88; }
+.nav-section-label { grid-column: 1 / -1; padding: 14px 10px 6px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .1em; color: var(--ink-muted); }
 .nav-section-label:first-child { padding-top: 2px; }
 .nav-section-label--accent { color: var(--brand); }
 
@@ -934,7 +995,7 @@ select { appearance: none; background-image: linear-gradient(45deg, transparent 
 /* ---------- public report page ---------- */
 .public-report { max-width: 860px; margin: 0 auto; padding: 32px 24px 60px; }
 .public-report-brand { display: flex; align-items: center; gap: 10px; margin-bottom: 28px; }
-.public-report-brand span { font-family: var(--font-serif); font-size: 19px; font-weight: 600; letter-spacing: -.01em; color: var(--ink-primary); }
+.public-report-brand span { font-size: 19px; font-weight: 700; letter-spacing: -.02em; color: var(--ink-primary); }
 .public-report-body { background: var(--panel-bg); border: 1px solid var(--panel-border); border-radius: var(--radius-lg); padding: 32px; box-shadow: var(--shadow-sm); }
 .public-report-header { margin-bottom: 20px; }
 .public-report-header h1 { margin: 4px 0 0; }
@@ -1022,10 +1083,12 @@ select { appearance: none; background-image: linear-gradient(45deg, transparent 
 .lumina-ai { position: fixed; right: 24px; bottom: 24px; z-index: 60; display: flex; flex-direction: column; align-items: flex-end; gap: 14px; }
 button.lumina-ai-fab {
   width: 52px; height: 52px; border-radius: 999px; padding: 0;
-  background: var(--brand); color: var(--brand-ink); border: none;
+  background: var(--brand-gradient); color: #fff; border: none;
   display: flex; align-items: center; justify-content: center;
   box-shadow: var(--shadow-lg);
 }
+/* A gradient can't be transitioned, so hover deepens via a flat overlay
+   colour rather than animating the gradient stops. */
 button.lumina-ai-fab:hover { background: var(--brand-strong); }
 button.lumina-ai-fab svg { width: 22px; height: 22px; }
 
@@ -1060,7 +1123,20 @@ button.lumina-ai-close:hover { background: rgba(0,0,0,.06); color: var(--ink-pri
 
 @media (max-width: 760px) {
   .app-shell { grid-template-columns: 1fr; }
-  .sidebar { position: static; height: auto; border-right: 0; border-bottom: 1px solid var(--panel-border); }
+  /* The sidebar becomes a full-width top bar here, so the desktop collapse
+     rail doesn't apply -- force it back to full width even if the user left
+     it collapsed on a wider screen, and hide the toggle that can't help. */
+  .sidebar, .sidebar--collapsed { position: static; height: auto; width: auto; padding: 26px 16px; border-right: 0; border-bottom: 1px solid var(--panel-border); }
+  .sidebar-collapse-toggle { display: none; }
+  .sidebar--collapsed .brand-text,
+  .sidebar--collapsed .nav-section-label,
+  .sidebar--collapsed nav a span,
+  .sidebar--collapsed .login-link span,
+  .sidebar--collapsed .sidebar-search-trigger span { display: revert; }
+  .sidebar--collapsed .brand-row { justify-content: flex-start; padding: 0 8px; }
+  .sidebar--collapsed nav a,
+  .sidebar--collapsed .login-link,
+  .sidebar--collapsed .sidebar-search-trigger { justify-content: flex-start; padding-left: 10px; padding-right: 10px; }
   .sidebar nav { grid-template-columns: repeat(2, 1fr); }
   .sidebar nav a.active::before { display: none; }
   .login-link { margin-top: 14px; }
