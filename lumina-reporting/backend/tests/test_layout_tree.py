@@ -136,12 +136,25 @@ def test_validate_catches_a_mode_and_height_mismatch():
     assert any('height' in problem for problem in validate(tree))
 
 
-def test_validate_catches_a_css_declaration_in_a_style_token():
+def test_validate_catches_a_style_token_outside_the_vocabulary():
     """The renderer-agnostic rule, checked for trees built in code as well
-    as for rows the database already guards."""
+    as for rows the database already guards.
+
+    The check used to be "no colon, no semicolon", which let through any
+    plausible-looking name the stylesheet had no rule for -- and an element
+    styled `heading-7` draws as body text while the canvas shows a heading.
+    It is membership of schema_v2.styling.STYLE_TOKENS now.
+    """
     tree = layout_from_components([{'type': 'text_block'}])
-    tree[0]['elements'][0]['style_token'] = 'font-size: 12pt'
-    assert any('CSS declaration' in problem for problem in validate(tree))
+    for token in ('font-size: 12pt', 'heading-7'):
+        tree[0]['elements'][0]['style_token'] = token
+        assert any('unknown style token' in problem for problem in validate(tree)), token
+
+
+def test_validate_catches_an_option_outside_its_vocabulary():
+    tree = layout_from_components([{'type': 'text_block'}])
+    tree[0]['elements'][0]['options'] = {'color': '#eb6834'}
+    assert any('color=' in problem for problem in validate(tree))
 
 
 def test_validate_catches_an_unknown_element_type():

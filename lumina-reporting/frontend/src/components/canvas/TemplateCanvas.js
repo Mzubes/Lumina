@@ -5,7 +5,8 @@ import {
   createTemplate, isDemoMode, listTemplates, loadTemplate, newVersion,
   publishTemplate, saveTemplate, toApiTemplate,
 } from '../../templateApi';
-import CanvasElement, { ELEMENT_LABELS } from './CanvasElement';
+import CanvasElement from './CanvasElement';
+import Inspector from './Inspector';
 import DEMO_TEMPLATE from './demoTemplate';
 import PageSurface from './PageSurface';
 import useTemplateEditor from './useTemplateEditor';
@@ -179,10 +180,18 @@ const TemplateCanvas = () => {
     ? bands[bands.length - 1].top + bands[bands.length - 1].height > content.height
     : false;
 
-  const selected = selection.length === 1
-    ? template.sections.flatMap(section => section.elements)
-        .find(element => element.id === selection[0])
-    : null;
+  // Which band the inspector edits when nothing is selected: the one
+  // holding the last selected element, else the first. A properties pane
+  // that shows nothing at rest wastes the panel it sits in.
+  const [bandOrdinal, setBandOrdinal] = useState(0);
+  const activeSection = useMemo(() => {
+    const owning = template.sections.find(
+      section => section.elements.some(element => selection.includes(element.id)));
+    return owning
+      || template.sections.find(section => section.ordinal === bandOrdinal)
+      || template.sections[0]
+      || null;
+  }, [template.sections, selection, bandOrdinal]);
 
   const setPage = (patch) => {
     editor.begin();
@@ -319,36 +328,29 @@ const TemplateCanvas = () => {
           <ol className="canvas-outline-list">
             {bands.map(({ section, height }) => (
               <li key={section.ordinal}>
-                <strong>{section.name}</strong>
-                <span className="panel-subtitle">
-                  {section.layout_mode} · {height}mm · {section.elements.length} element
-                  {section.elements.length === 1 ? '' : 's'}
-                </span>
+                <button
+                  type="button"
+                  className={`canvas-outline-band${
+                    activeSection && activeSection.ordinal === section.ordinal
+                      ? ' is-active' : ''}`}
+                  onClick={() => { setSelection([]); setBandOrdinal(section.ordinal); }}
+                >
+                  <strong>{section.name || `Band ${section.ordinal + 1}`}</strong>
+                  <span className="panel-subtitle">
+                    {section.layout_mode} · {height}mm · {section.elements.length} element
+                    {section.elements.length === 1 ? '' : 's'}
+                  </span>
+                </button>
               </li>
             ))}
           </ol>
 
-          <h2 className="panel-title">
-            Selection{selection.length > 1 ? ` · ${selection.length} elements` : ''}
-          </h2>
-          {selected ? (
-            <dl className="canvas-props">
-              <dt>Type</dt><dd>{ELEMENT_LABELS[selected.element_type]}</dd>
-              <dt>X</dt><dd>{selected.x_mm}mm</dd>
-              <dt>Y</dt><dd>{selected.y_mm}mm</dd>
-              <dt>Width</dt><dd>{selected.w_mm}mm</dd>
-              <dt>Height</dt><dd>{selected.h_mm}mm</dd>
-            </dl>
-          ) : selection.length > 1 ? (
-            <p className="panel-subtitle">
-              {selection.length} elements selected — drag to move them together.
-            </p>
-          ) : (
-            <p className="panel-subtitle">
-              Nothing selected. Click an element; shift-click to add. Arrow keys nudge,
-              shift-arrow nudges finely, Alt suspends snapping.
-            </p>
-          )}
+          <Inspector editor={editor} section={activeSection} />
+
+          <p className="panel-subtitle canvas-hint">
+            Click an element; shift-click to add. Arrow keys nudge, shift-arrow
+            nudges finely, Alt suspends snapping.
+          </p>
         </aside>
       </div>
     </div>

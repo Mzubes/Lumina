@@ -34,6 +34,7 @@ def _tree(**overrides):
                         'x_mm': 0, 'y_mm': 0, 'w_mm': 178, 'h_mm': 12,
                         'static_text': 'Performance',
                         'style_token': 'heading-1',
+                        'options': {'align': 'left', 'color': 'primary'},
                     },
                     {
                         'element_type': 'field',
@@ -137,14 +138,15 @@ def test_save_replaces_the_tree_rather_than_merging_it(app, client, auth_headers
 
 def test_options_round_trip_as_json(client, auth_headers):
     created = _create(client, auth_headers).get_json()
-    created['sections'][0]['elements'][0]['options'] = {'align': 'center', 'columns': 2}
+    created['sections'][0]['elements'][0]['options'] = {
+        'align': 'center', 'border': 'bottom', 'fill': 'tint'}
     client.put(f'/api/document-templates/{created["id"]}',
                json=created, headers=auth_headers)
 
     fetched = client.get(f'/api/document-templates/{created["id"]}',
                          headers=auth_headers).get_json()
     assert fetched['sections'][0]['elements'][0]['options'] == {
-        'align': 'center', 'columns': 2}
+        'align': 'center', 'border': 'bottom', 'fill': 'tint'}
 
 
 def test_name_and_code_are_required(client, auth_headers):
@@ -161,7 +163,35 @@ def test_a_css_declaration_is_not_a_style_token(client, auth_headers):
     payload['sections'][0]['elements'][0]['style_token'] = 'font-size: 40px'
     response = client.post('/api/document-templates', json=payload, headers=auth_headers)
     assert response.status_code == 400
-    assert 'style_token' in response.get_json()['message']
+    assert 'unknown style token' in response.get_json()['message']
+
+
+def test_a_style_token_outside_the_vocabulary_is_refused(client, auth_headers):
+    """Not just CSS -- a plausible-looking name the renderer has no rule for
+    would draw body text while the canvas showed a heading."""
+    payload = _tree()
+    payload['sections'][0]['elements'][0]['style_token'] = 'heading-7'
+    response = client.post('/api/document-templates', json=payload, headers=auth_headers)
+    assert response.status_code == 400
+    assert 'heading-7' in response.get_json()['message']
+
+
+def test_an_unknown_option_key_is_reported_not_dropped(client, auth_headers):
+    payload = _tree()
+    payload['sections'][0]['elements'][0]['options'] = {'alignment': 'center'}
+    response = client.post('/api/document-templates', json=payload, headers=auth_headers)
+    assert response.status_code == 400
+    assert "unknown option 'alignment'" in response.get_json()['message']
+
+
+def test_an_option_value_outside_its_vocabulary_is_refused(client, auth_headers):
+    payload = _tree()
+    payload['sections'][0]['elements'][0]['options'] = {'color': '#ff0000'}
+    response = client.post('/api/document-templates', json=payload, headers=auth_headers)
+    assert response.status_code == 400
+    # A hex is exactly what the role vocabulary exists to keep out: an
+    # element carrying one keeps drawing the old brand after a rebrand.
+    assert 'color=' in response.get_json()['message']
 
 
 def test_a_repeating_band_cannot_sit_in_the_middle_of_the_flow(client, auth_headers):
@@ -208,7 +238,7 @@ def test_every_problem_in_one_reply(client, auth_headers):
     payload['page']['size'] = 'a7'
     message = client.post('/api/document-templates', json=payload,
                           headers=auth_headers).get_json()['message']
-    assert 'a7' in message and 'style_token' in message and 'nonsense' in message
+    assert 'a7' in message and 'color: red' in message and 'nonsense' in message
 
 
 def test_nothing_is_written_when_a_tree_is_refused(app, client, auth_headers):
@@ -344,3 +374,8 @@ def test_a_saved_tree_renders(app, client, auth_headers):
     html = render_template_html(tree)
     assert 'Performance' in html
     assert 'Meridian Endowment' in html
+    # The style token reached the page. Until E3 it was stored, carried
+    # through the tree, and then silently ignored by the renderer.
+    assert 'st-heading-1' in html
+    assert '.st-heading-1 {' in html
+    assert 'color-primary' in html

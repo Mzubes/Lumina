@@ -162,7 +162,8 @@
   <div class="band band-fixed{{ ' band-' + section.pin if section.pin }}"
        style="height: {{ section.height_mm }}mm">
     {% for element in section.elements %}
-      <div class="el el-{{ element.element_type }}" {{ element_box(element) }}>
+      <div class="el el-{{ element.element_type }} {{ element | style_classes }}"
+           {{ element_box(element) }}>
         {{- element_body(element, theme) -}}
       </div>
     {% endfor %}

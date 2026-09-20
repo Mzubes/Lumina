@@ -1529,12 +1529,81 @@ button.assistant-followup:hover { background: var(--brand-tint); color: var(--br
 .canvas-el-line { background: var(--panel-border-strong); border: 0; }
 .canvas-el:focus-visible { outline: 2px solid var(--brand); outline-offset: 1px; }
 
-.canvas-outline { width: 260px; flex: 0 0 260px; }
-.canvas-outline-list { list-style: none; margin: 0 0 18px; padding: 0; display: flex; flex-direction: column; gap: 10px; }
-.canvas-outline-list li { display: flex; flex-direction: column; gap: 2px; }
-.canvas-props { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; margin: 0; font-size: 13px; }
-.canvas-props dt { color: var(--ink-muted); }
-.canvas-props dd { margin: 0; font-variant-numeric: tabular-nums; }
+.canvas-outline { width: 288px; flex: 0 0 288px; }
+.canvas-outline-list { list-style: none; margin: 0 0 18px; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.canvas-outline-list li { display: flex; }
+.canvas-outline-band {
+  display: flex; flex-direction: column; gap: 2px; align-items: flex-start;
+  width: 100%; text-align: left; padding: 7px 9px; border-radius: var(--radius-sm);
+  border: 1px solid transparent; background: none; cursor: pointer; color: inherit;
+}
+.canvas-outline-band:hover { background: var(--page-bg-2); }
+.canvas-outline-band.is-active { border-color: var(--brand); background: var(--brand-tint); }
+.canvas-outline-band .panel-subtitle { margin: 0; font-size: 11px; }
+
+/* ---------- properties inspector (Phase E3) ---------- */
+.inspector { display: flex; flex-direction: column; gap: 8px; }
+.inspector-type { margin: 0 0 4px; font-size: 13px; font-weight: 600; }
+.inspector-type i { font-style: normal; font-weight: 400; color: var(--ink-muted); }
+.inspector-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.inspector-field { display: flex; align-items: center; gap: 8px; font-size: 12px; }
+.inspector-field > span { flex: 0 0 62px; color: var(--ink-muted); }
+.inspector-field input, .inspector-field select, .inspector-field textarea {
+  flex: 1 1 auto; min-width: 0; font-size: 12px; padding: 5px 7px;
+}
+.inspector-field input[type="number"] { font-variant-numeric: tabular-nums; }
+.inspector-field i { font-style: normal; font-size: 11px; color: var(--ink-muted); }
+.inspector-grid .inspector-field > span { flex: 0 0 auto; }
+.inspector-field-wide { align-items: flex-start; }
+.inspector-check { gap: 6px; }
+.inspector-check input { flex: 0 0 auto; }
+.inspector-check > span { flex: 0 0 auto; }
+.canvas-hint { margin: 12px 0 0; font-size: 11px; }
+
+/* ---------- the style vocabulary, on screen ----------
+   Screen equivalents of the tokens in schema_v2/styling.py. Approximate by
+   nature -- the print stylesheet sets points against A4 and this is a
+   zoomable screen surface -- but driven by the SAME token, so an element
+   cannot read as a heading here and as body text in the PDF. E6's live
+   preview is what makes the two pixel-comparable. */
+.canvas-el.st-heading-1 .canvas-el-body { font-size: 13px; font-weight: 700; color: var(--ink-primary); }
+.canvas-el.st-heading-2 .canvas-el-body { font-size: 11px; font-weight: 700; color: var(--ink-primary); }
+.canvas-el.st-heading-3 .canvas-el-body { font-size: 9px; font-weight: 700; color: var(--ink-primary); }
+.canvas-el.st-body .canvas-el-body { font-size: 8px; color: var(--ink-primary); }
+.canvas-el.st-body-small .canvas-el-body { font-size: 7px; color: var(--ink-primary); }
+.canvas-el.st-label .canvas-el-body {
+  font-size: 6.5px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+}
+.canvas-el.st-figure .canvas-el-body { font-size: 13px; font-weight: 700; color: var(--ink-primary); font-variant-numeric: tabular-nums; }
+.canvas-el.st-figure-large .canvas-el-body { font-size: 18px; font-weight: 700; color: var(--ink-primary); font-variant-numeric: tabular-nums; }
+.canvas-el.st-caption .canvas-el-body { font-size: 7px; }
+.canvas-el.st-disclosure .canvas-el-body { font-size: 6.5px; }
+
+.canvas-el.align-left { justify-content: flex-start; }
+.canvas-el.align-center { justify-content: center; }
+.canvas-el.align-right { justify-content: flex-end; }
+.canvas-el.va-top, .canvas-el.va-middle, .canvas-el.va-bottom { flex-direction: column; }
+.canvas-el.va-top { justify-content: flex-start; align-items: flex-start; }
+.canvas-el.va-middle { justify-content: center; }
+.canvas-el.va-bottom { justify-content: flex-end; align-items: flex-start; }
+
+.canvas-el.color-ink .canvas-el-body { color: var(--ink-primary); }
+.canvas-el.color-muted .canvas-el-body { color: var(--ink-muted); }
+.canvas-el.color-primary .canvas-el-body { color: var(--brand-strong); }
+.canvas-el.color-accent .canvas-el-body { color: var(--brand); }
+.canvas-el-line.color-primary, .canvas-el-box.color-primary { background: var(--brand-strong); }
+.canvas-el-line.color-accent, .canvas-el-box.color-accent { background: var(--brand); }
+
+.canvas-el.border-top { border-top: 1px solid var(--ink-primary); }
+.canvas-el.border-bottom { border-bottom: 1px solid var(--ink-primary); }
+.canvas-el.border-box { border: 1px solid var(--ink-primary); }
+.canvas-el.fill-tint { background: var(--brand-tint); }
+.canvas-el.fill-tint-strong { background: color-mix(in srgb, var(--brand) 18%, #fff); }
+.canvas-el.fill-accent-tint { background: color-mix(in srgb, var(--brand) 12%, #fff); }
+
+/* Hidden means hidden in the document; on the canvas it has to stay
+   selectable, or an author could never turn it back on. */
+.canvas-el.is-hidden { opacity: .35; border-style: dashed; }
 
 @media (max-width: 1100px) {
   .canvas-layout { flex-direction: column; }

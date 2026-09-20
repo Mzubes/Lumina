@@ -147,11 +147,34 @@ export const useTemplateEditor = (initial) => {
     patchElements(new Map([[id, patch]]));
   }, [patchElements]);
 
+  // One option key at a time, merged into what is already there. Clearing
+  // a key REMOVES it rather than storing null: an options object full of
+  // nulls is a diff nobody can read and a save that looks like a change.
+  const setElementOption = useCallback((id, key, value) => {
+    const entry = elementsById.get(id);
+    if (!entry) return;
+    const options = { ...(entry.element.options || {}) };
+    if (value === null || value === undefined || value === '') delete options[key];
+    else options[key] = value;
+    patchElements(new Map([[id, {
+      options: Object.keys(options).length ? options : null,
+    }]]));
+  }, [elementsById, patchElements]);
+
+  const setSection = useCallback((ordinal, patch) => {
+    setTemplate(current => ({
+      ...current,
+      sections: current.sections.map(section =>
+        (section.ordinal === ordinal ? { ...section, ...patch } : section)),
+    }));
+  }, []);
+
   return {
     template, setTemplate, load, bounds, elementsById,
     selection, select, setSelection,
     begin, undo, redo, canUndo: depth.past > 0, canRedo: depth.future > 0,
-    gesture, nudgeSelection, changeOrder, setElement, roundMm,
+    gesture, nudgeSelection, changeOrder, setElement, setElementOption,
+    setSection, roundMm,
   };
 };
 

@@ -193,6 +193,65 @@
   /* Outside a repeating band the counter resolves normally, so an
      ordinary page_number element can stay where it was placed. */
   .el-page-number::after { content: counter(page) " of " counter(pages); }
+
+  /* ---- the style vocabulary (Phase E3) ---------------------------------
+     schema_v2/styling.py is the closed list; these are its meanings in
+     this renderer. An element names a ROLE and the stylesheet decides what
+     the role looks like, so a template stays renderer-agnostic and a
+     rebrand does not have to rewrite every element.
+
+     A token with no rule here draws nothing rather than injecting an
+     unknown declaration -- which is the whole reason these are classes and
+     not inline style. */
+  .st-heading-1 { font-size: 15pt; font-weight: 700; color: {{ theme.primary }}; }
+  .st-heading-2 { font-size: 11.5pt; font-weight: 700; color: {{ theme.primary }}; }
+  .st-heading-3 { font-size: 9.5pt; font-weight: 700; color: {{ theme.ink }}; }
+  .st-body { font-size: 8.5pt; color: {{ theme.ink }}; }
+  .st-body-small { font-size: 7.5pt; color: {{ theme.ink }}; }
+  .st-label {
+    font-size: 6.5pt; font-weight: 700; letter-spacing: .08em;
+    text-transform: uppercase; color: {{ theme.muted }};
+  }
+  /* Tabular figures: a column of numbers whose digits are not the same
+     width does not line up, which is the fastest way a generated table
+     looks amateur. */
+  .st-figure { font-size: 14pt; font-weight: 700; color: {{ theme.ink }};
+               font-variant-numeric: tabular-nums; }
+  .st-figure-large { font-size: 22pt; font-weight: 700; color: {{ theme.primary }};
+                     font-variant-numeric: tabular-nums; }
+  .st-caption { font-size: 7pt; color: {{ theme.muted }}; }
+  .st-disclosure { font-size: 6.5pt; color: {{ theme.muted }}; }
+
+  .align-left { text-align: left; }
+  .align-center { text-align: center; }
+  .align-right { text-align: right; }
+
+  /* Vertical placement inside a fixed band's box. Flex rather than
+     line-height, which only works for one line. */
+  .va-top, .va-middle, .va-bottom { display: flex; flex-direction: column; }
+  .va-top { justify-content: flex-start; }
+  .va-middle { justify-content: center; }
+  .va-bottom { justify-content: flex-end; }
+
+  /* Colour by ROLE. No element carries a hex -- see styling.py. */
+  .color-ink { color: {{ theme.ink }}; }
+  .color-muted { color: {{ theme.muted }}; }
+  .color-primary { color: {{ theme.primary }}; }
+  .color-accent { color: {{ theme.accent }}; }
+  /* A rule element takes its colour as a background, since it has no text. */
+  .color-primary .el-rule, .color-primary.el-line .el-rule { background: {{ theme.primary }}; }
+  .color-accent .el-rule, .color-accent.el-line .el-rule { background: {{ theme.accent }}; }
+
+  .border-top { border-top: .8pt solid {{ theme.rule }}; }
+  .border-bottom { border-bottom: .8pt solid {{ theme.rule }}; }
+  .border-box { border: .8pt solid {{ theme.rule }}; }
+  /* Any border means the text should not sit against it. */
+  .border-top, .border-bottom, .border-box { padding: 1.5mm 0; }
+  .border-box { padding: 1.5mm 2mm; }
+
+  .fill-tint { background: {{ theme.primary_tint }}; padding: 1.5mm 2mm; }
+  .fill-tint-strong { background: {{ theme.primary_tint_strong }}; padding: 1.5mm 2mm; }
+  .fill-accent-tint { background: {{ theme.accent_tint }}; padding: 1.5mm 2mm; }
 </style>
 
 {# Page furniture for the legacy path only. A v2 template designs its own
@@ -228,7 +287,7 @@
           wrong: an unbound v2 element -- static words, a rule, a box --
           fell through to the legacy chain and rendered nothing. -#}
       {% if not element.legacy %}
-      <div class="el el-inline el-{{ element.element_type }}">{{ charts.element_body(element, theme) }}</div>
+      <div class="el el-inline el-{{ element.element_type }} {{ element | style_classes }}">{{ charts.element_body(element, theme) }}</div>
 
     {% elif element.element_type == 'text' %}
       <div class="text-block">{{ component.text }}</div>

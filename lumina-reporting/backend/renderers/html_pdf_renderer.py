@@ -31,6 +31,7 @@ from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from renderers.charts import build_chart
 from renderers.layout import layout_from_components, pin_repeating_bands, validate
+from schema_v2.styling import element_classes
 from weasyprint import HTML
 
 TEMPLATE_DIR = Path(__file__).parent / 'templates'
@@ -253,6 +254,10 @@ def _environment():
         autoescape=select_autoescape(['html']),
     )
     environment.filters['cell'] = _format_cell
+    # The one place a style_token or an option becomes a class. Kept in
+    # schema_v2.styling rather than in the template so the API's validation
+    # and the renderer's output cannot drift apart.
+    environment.filters['style_classes'] = lambda element: ' '.join(element_classes(element))
     return environment
 
 

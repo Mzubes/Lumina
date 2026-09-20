@@ -1,6 +1,7 @@
 import React from 'react';
 
 import { HANDLES } from '../../canvasGeometry';
+import { elementClasses } from '../../elementStyles';
 
 // One element, anchored in millimetres inside its band.
 //
@@ -24,7 +25,16 @@ const preview = (element) => {
 
 const CanvasElement = ({ element, isSelected, onPointerDown, onHandlePointerDown }) => (
   <div
-    className={`canvas-el canvas-el-${element.element_type}${isSelected ? ' is-selected' : ''}`}
+    // The same classes the renderer resolves from this element's token
+    // and options -- see elementStyles.js. The canvas's own stylesheet
+    // gives them screen equivalents, so a heading looks like a heading
+    // here for the same reason it does in the PDF.
+    className={[
+      'canvas-el', `canvas-el-${element.element_type}`,
+      ...elementClasses(element),
+      isSelected ? 'is-selected' : '',
+      element.is_visible === false ? 'is-hidden' : '',
+    ].filter(Boolean).join(' ')}
     style={{
       left: `${element.x_mm}mm`, top: `${element.y_mm}mm`,
       width: `${element.w_mm}mm`, height: `${element.h_mm}mm`,

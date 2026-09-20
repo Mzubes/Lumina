@@ -21,6 +21,7 @@ from database import db_session
 from renderers.layout import validate
 from routes.auth import require_auth
 from schema_v2 import DocumentTemplate, Firm, TemplateElement, TemplateSection
+from schema_v2.styling import option_problems, style_problems
 from schema_v2.templates import (BINDING_KINDS, BREAK_RULES, ELEMENT_TYPES,
                                  LAYOUT_MODES, ORIENTATIONS, PAGE_SIZES,
                                  REPEAT_MODES, SYSTEM_BINDINGS)
@@ -155,10 +156,8 @@ def _validation_error(payload):
             key = element.get('binding_key')
             if key and key not in SYSTEM_BINDINGS:
                 problems.append(f"{where}: unknown system binding {key!r}")
-            token = element.get('style_token')
-            if token and (':' in token or ';' in token):
-                problems.append(f"{where}: style_token {token!r} is a CSS declaration, "
-                                f"not a brand-kit token")
+            problems.extend(style_problems(element.get('style_token'), where))
+            problems.extend(option_problems(element.get('options'), where))
 
     # The renderer's own check, on the same shape it will later draw.
     # `validate` indexes the keys it needs rather than getting them, so the

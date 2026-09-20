@@ -20,6 +20,7 @@ fixtures.
 
 import json
 
+from schema_v2.styling import option_problems, style_problems
 from schema_v2.templates import ELEMENT_TYPES, LAYOUT_MODES
 
 # A4 portrait at the default margins. The legacy path has no template row to
@@ -190,10 +191,9 @@ def validate(tree):
             if element['element_type'] not in ELEMENT_TYPES:
                 problems.append(f"section {section['ordinal']}: unknown element type "
                                 f"{element['element_type']!r}")
-            token = element.get('style_token')
-            if token and (':' in token or ';' in token):
-                problems.append(f"section {section['ordinal']}: style_token {token!r} "
-                                f"is a CSS declaration, not a brand-kit token")
+            where = f"section {section['ordinal']}"
+            problems.extend(style_problems(element.get('style_token'), where))
+            problems.extend(option_problems(element.get('options'), where))
 
     for index, section in enumerate(tree):
         if section.get('repeat_mode', 'none') == 'none':

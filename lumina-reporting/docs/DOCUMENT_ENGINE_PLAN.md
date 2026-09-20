@@ -411,8 +411,50 @@ paint. A check that asserted "eight handles exist" would have passed while
 resize was dead. Only driving the gesture and measuring the width caught
 it.
 
-**Still not persisted:** the canvas reads a template held in component
-state. The template API is next.
+**The template API as built.** `GET/POST /api/document-templates`,
+`GET/PUT/DELETE /api/document-templates/<id>`, plus `/versions` and
+`/publish`. A save replaces the tree **wholesale** rather than diffing it:
+the canvas edits template, bands and elements at once, and per-element
+CRUD would turn one drag into three round trips and make the canvas
+responsible for keeping an id map in sync. Row ids are therefore not
+stable across a save, so the response returns what was written and the
+canvas adopts that. Validation reuses `renderers.layout.validate`, so the
+API refuses exactly the trees the renderer refuses — storing a template
+that cannot be drawn only moves the failure to whoever opens the PDF.
+
+A published template is immutable (409 on edit); `/versions` clones it at
+version *n+1*, because packs already rendered from it.
+
+**E3 as built.** The properties pane offers **only what the renderer
+honours**, which turned out to be a bigger constraint than it sounds:
+`style_token` was stored, validated and carried all the way through the
+layout tree, and then *silently ignored* — a template could say
+`heading-1` and the PDF would draw body text. E3 closed that.
+
+`schema_v2/styling.py` is now the closed vocabulary — ten typographic
+tokens plus `align`, `valign`, `color`, `border`, `fill` — shared by the
+schema's validation, the print stylesheet and the canvas inspector.
+`elementStyles.js` mirrors it on the frontend and a test reads the Python
+file to assert the two lists match.
+
+**Every value is a NAME, never a literal.** `color: 'accent'`, not
+`#eb6834`. A colour picker would be friendlier and would pin a hex into a
+template that then keeps drawing the old brand after a rebrand — and would
+hand Phase G's PPTX renderer CSS to interpret. The brand kit decides what
+`accent` looks like.
+
+Two more faults the phase surfaced, both silent:
+
+- **`var(--ink)` does not exist** — the token is `--ink-primary`. A whole
+  block of new canvas styling was inert while the build, the lint and
+  every test passed; only reading the computed `border-bottom-width` in a
+  real browser showed it. `styles.test.js` now asserts every custom
+  property referenced anywhere is defined somewhere (including the ones
+  set inline from JS).
+- **`CHART_KINDS` carried `column`,** which nothing can draw, and omitted
+  `bar_comparison`, which something can — a dropdown entry producing a
+  blank box, and a capability nobody could reach. A test now asserts the
+  list equals `renderers.charts.KINDS` exactly.
 
 **Verification:** rebuild the seeded Pzena factsheet from scratch on the
 canvas, with no code, and render it.
