@@ -23,7 +23,7 @@ const Ruler = ({ lengthMm, zoom, axis }) => {
   );
 };
 
-const PageSurface = ({ page, zoom = 1, children, onBackgroundClick }) => {
+const PageSurface = ({ page, zoom = 1, children, guides, onBackgroundClick }) => {
   const sheet = pageSize(page.size, page.orientation);
   const content = contentBox(page);
   const step = gridStepMm(zoom);
@@ -77,6 +77,16 @@ const PageSurface = ({ page, zoom = 1, children, onBackgroundClick }) => {
           }}
         >
           {children}
+
+          {/* The alignment guide, drawn only while a drag is snapping to
+              it -- a line that stays up after the gesture reads as part of
+              the design rather than as feedback. */}
+          {guides?.x != null && (
+            <span className="canvas-guide canvas-guide-x" style={{ left: `${guides.x}mm` }} />
+          )}
+          {guides?.y != null && (
+            <span className="canvas-guide canvas-guide-y" style={{ top: `${guides.y}mm` }} />
+          )}
         </div>
       </div>
     </div>

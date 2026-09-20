@@ -352,7 +352,7 @@ inside guardrails marketing sets:
 | | Sub-phase | Delivers |
 |---|---|---|
 | E1 | Page surface + element model · **SHIPPED** | A4/Letter, portrait/landscape, margins, rulers, grid, zoom. Elements as absolutely-positioned DOM. |
-| E2 | Direct manipulation | Select, multi-select, drag, resize handles, snap-to-grid, snap-to-element, alignment guides, z-order, keyboard nudge, undo/redo. Via `interact.js` or `moveable` on DOM. |
+| E2 | Direct manipulation · **SHIPPED** | Select, multi-select, drag, resize handles, snap-to-grid, snap-to-element, alignment guides, z-order, keyboard nudge, undo/redo. Built on pointer events — no library. |
 | E3 | Properties inspector | Right panel: position, size, typography, colour from the brand kit, borders, padding — the Coric Properties pane. |
 | E4 | Data binding | Bind an element to a `DatasetField` or `DisplaySpec`. Field picker driven by the dataset's own metadata. Live sample values on the canvas. |
 | E5 | Sections + outline | Left/right outline of sections and pages, matching Coric's Sections pane. Band properties: data source, break behaviour, orientation. |
@@ -382,10 +382,37 @@ Measured in a real browser rather than asserted:
 
 Sub-pixel agreement, which is the WYSIWYG guarantee the phase rests on.
 
-**Not yet:** E2 (drag, resize, snap, undo) — nothing moves on the surface
-yet, deliberately: the unit had to be right before anything moved on it.
-The canvas reads a template held in component state; the template API
-(E4/E5) is what makes it persist.
+**E2 as built.** No library. `interact.js` and `moveable` were both
+sanctioned, but the geometry is ~170 lines and a library would have to be
+told about the zoom transform anyway; doing it directly keeps the scale
+maths explicit and in one place. `canvasGeometry.js` is pure and
+unit-tested — the component only converts a pixel delta to millimetres
+(dividing by zoom once) and hands it over, so nothing downstream can be
+wrong about the scale because nothing downstream sees pixels.
+
+Driven in Chromium, measured rather than eyeballed:
+
+| Gesture | Result |
+|---|---|
+| drag +20mm, +10mm (Alt suspends snapping) | dx 20.00mm, dy 10.00mm |
+| released 0.8mm short of a neighbour's edge | snapped to exactly 0.000mm |
+| resize east −20mm | 110 → 90mm, **left edge moved 0.000mm** |
+| undo | back to 110mm in one step |
+| arrow / shift-arrow | 5mm / 1mm |
+| multi-select group drag | 2 selected, both moved 10.0mm |
+
+History snapshots at the *start* of a gesture, so a drag is one undo step
+rather than a frame-by-frame replay.
+
+**A bug worth recording:** the resize handles rendered, reported bounding
+boxes, and were silently unclickable — `.canvas-el` had `overflow: hidden`,
+which clips a half-outside handle out of hit-testing as well as out of
+paint. A check that asserted "eight handles exist" would have passed while
+resize was dead. Only driving the gesture and measuring the width caught
+it.
+
+**Still not persisted:** the canvas reads a template held in component
+state. The template API is next.
 
 **Verification:** rebuild the seeded Pzena factsheet from scratch on the
 canvas, with no code, and render it.

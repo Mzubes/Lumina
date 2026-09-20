@@ -1514,7 +1514,11 @@ button.assistant-followup:hover { background: var(--brand-tint); color: var(--br
 .canvas-band-label i { font-style: normal; color: var(--brand); }
 
 .canvas-el {
-  position: absolute; overflow: hidden; cursor: default;
+  /* NOT overflow:hidden. The resize handles sit half outside the box so a
+     thin element stays grabbable, and clipping the element clipped them
+     out of hit-testing too -- they rendered, reported bounding boxes, and
+     were silently unclickable. The body clips its own text instead. */
+  position: absolute; cursor: default;
   border: 1px solid var(--panel-border-strong); background: var(--panel-bg);
   display: flex; align-items: center; padding: 0 1mm;
 }
@@ -1536,3 +1540,30 @@ button.assistant-followup:hover { background: var(--brand-tint); color: var(--br
   .canvas-layout { flex-direction: column; }
   .canvas-outline { width: 100%; flex: 1 1 auto; }
 }
+
+/* ---------- canvas direct manipulation (Phase E2) ---------- */
+.canvas-toolbar-actions { display: flex; gap: 8px; align-items: center; }
+.canvas-toolbar-actions button { font-size: 12px; padding: 6px 10px; }
+
+.canvas-el { touch-action: none; user-select: none; }
+.canvas-el.is-selected { cursor: move; }
+
+/* Handles sit half outside the box so a thin element is still resizable.
+   Sized in px, not mm: a grab target is a property of the pointer, not of
+   the document, so it must not shrink when the page is zoomed out. */
+.canvas-handle {
+  position: absolute; width: 7px; height: 7px; background: var(--panel-bg);
+  border: 1px solid var(--brand); border-radius: 1px; z-index: 2;
+}
+.canvas-handle-nw { left: -4px; top: -4px; cursor: nwse-resize; }
+.canvas-handle-n  { left: calc(50% - 3.5px); top: -4px; cursor: ns-resize; }
+.canvas-handle-ne { right: -4px; top: -4px; cursor: nesw-resize; }
+.canvas-handle-e  { right: -4px; top: calc(50% - 3.5px); cursor: ew-resize; }
+.canvas-handle-se { right: -4px; bottom: -4px; cursor: nwse-resize; }
+.canvas-handle-s  { left: calc(50% - 3.5px); bottom: -4px; cursor: ns-resize; }
+.canvas-handle-sw { left: -4px; bottom: -4px; cursor: nesw-resize; }
+.canvas-handle-w  { left: -4px; top: calc(50% - 3.5px); cursor: ew-resize; }
+
+.canvas-guide { position: absolute; background: var(--cat-2); z-index: 3; pointer-events: none; }
+.canvas-guide-x { top: 0; bottom: 0; width: 1px; }
+.canvas-guide-y { left: 0; right: 0; height: 1px; }
