@@ -30,7 +30,7 @@ from pathlib import Path
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from renderers.charts import build_chart
-from renderers.layout import layout_from_components
+from renderers.layout import layout_from_components, pin_repeating_bands, validate
 from weasyprint import HTML
 
 TEMPLATE_DIR = Path(__file__).parent / 'templates'
@@ -265,10 +265,56 @@ def render_document_html(content):
     return template.render(
         content=content,
         sections=sections,
+        margin_boxes={},
+        reserved={'top': 0, 'bottom': 0},
+        document_header=True,
         theme=theme,
         header=content.get('header_config') or {},
         footer=content.get('footer_config') or {},
     )
+
+
+class TemplateLayoutError(ValueError):
+    """A layout tree that cannot be rendered.
+
+    Raised before a single byte is drawn. A structurally wrong template
+    that renders anyway produces a document someone has to notice is
+    wrong, which is worse than one that refuses to build.
+    """
+
+
+def render_template_html(tree, content=None, theme_config=None):
+    """A v2 DocumentTemplate's resolved tree, as HTML.
+
+    `tree` has already been through `layout_from_template()` and
+    `bindings.resolve_tree()` -- structure, then data. This adds the page
+    furniture and draws it.
+    """
+    problems = validate(tree)
+    if problems:
+        raise TemplateLayoutError('; '.join(problems))
+
+    theme = _theme(theme_config or {})
+    sections, margin_boxes, reserved = pin_repeating_bands(tree)
+    for section in sections:
+        section.setdefault('compact', False)
+    return _environment().get_template('report.html').render(
+        content=content or {},
+        sections=sections,
+        margin_boxes=margin_boxes,
+        reserved=reserved,
+        # A designed template draws its own masthead.
+        document_header=False,
+        theme=theme,
+        header=(content or {}).get('header_config') or {},
+        footer=(content or {}).get('footer_config') or {},
+    )
+
+
+def render_template_pdf(tree, content=None, theme_config=None):
+    document = HTML(string=render_template_html(tree, content, theme_config),
+                    base_url=str(TEMPLATE_DIR))
+    return document.write_pdf()
 
 
 def render_html_pdf(content):

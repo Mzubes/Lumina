@@ -169,4 +169,79 @@ def validate(tree):
             if token and (':' in token or ';' in token):
                 problems.append(f"section {section['ordinal']}: style_token {token!r} "
                                 f"is a CSS declaration, not a brand-kit token")
+
+    for index, section in enumerate(tree):
+        if section.get('repeat_mode', 'none') == 'none':
+            continue
+        if index not in (0, len(tree) - 1):
+            problems.append(
+                f"section {section['ordinal']}: a repeating band must be the first "
+                f"section (a page header) or the last (a page footer); one in the "
+                f"middle of the flow has no page position to take")
     return problems
+
+
+# Where a repeating band sits on the page. The schema says a band repeats;
+# it does not say where, because a band's place is its ordinal in the flow.
+# The only reading that survives is: the first band is the page header, the
+# last is the page footer. A repeating band in the middle has no page
+# position to take, and `validate()` rejects it rather than guessing.
+PIN_TOP, PIN_BOTTOM = 'top', 'bottom'
+
+# Which @page margin box a page number lands in, by where the author put
+# it across the band.
+_MARGIN_BOXES = {
+    (PIN_TOP, 'left'): '@top-left', (PIN_TOP, 'center'): '@top-center',
+    (PIN_TOP, 'right'): '@top-right',
+    (PIN_BOTTOM, 'left'): '@bottom-left', (PIN_BOTTOM, 'center'): '@bottom-center',
+    (PIN_BOTTOM, 'right'): '@bottom-right',
+}
+
+
+def _third(element, width_mm):
+    centre = float(element['x_mm']) + float(element['w_mm']) / 2
+    if centre < width_mm / 3:
+        return 'left'
+    return 'right' if centre > width_mm * 2 / 3 else 'center'
+
+
+def pin_repeating_bands(tree, width_mm=DEFAULT_CONTENT_WIDTH_MM):
+    """Resolve repeat_mode into a page position, and lift out the page
+    numbers that cannot live in a repeating band.
+
+    Returns (tree, margin_boxes, reserved). `reserved` is how much room
+    the flow content has to leave at the top and bottom: a pinned band is
+    out of flow, so without it the body starts at the top of the page and
+    the band lands on top of the first table -- which is exactly what the
+    first render did.
+
+    A repeating band is drawn once and
+    replicated by the engine, so a page counter inside one FREEZES --
+    measured: every page of a seven-page document read "p 1 of 7". A
+    `page_number` element in such a band is therefore moved into the @page
+    margin box nearest where it was authored, which is the only place the
+    counter resolves per page. The band keeps everything else.
+    """
+    out, margin_boxes = [], {}
+    reserved = {'top': 0.0, 'bottom': 0.0}
+    repeating = [index for index, section in enumerate(tree)
+                 if section.get('repeat_mode', 'none') != 'none']
+
+    for index, section in enumerate(tree):
+        if index not in repeating:
+            out.append(section)
+            continue
+
+        pin = PIN_TOP if index == 0 else PIN_BOTTOM if index == len(tree) - 1 else None
+        kept = []
+        for element in section['elements']:
+            if element['element_type'] == 'page_number' and pin:
+                margin_boxes[_MARGIN_BOXES[(pin, _third(element, width_mm))]] = {
+                    'style_token': element.get('style_token'),
+                }
+                continue
+            kept.append(element)
+        if pin:
+            reserved[pin] += float(section.get('height_mm') or 0)
+        out.append({**section, 'pin': pin, 'elements': kept})
+    return out, margin_boxes, reserved

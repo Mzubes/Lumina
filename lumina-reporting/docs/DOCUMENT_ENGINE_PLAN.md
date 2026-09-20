@@ -228,7 +228,7 @@ shrank the blast radius of a small edit from 3.9% to 1.4%.
 
 ---
 
-### D · Template model v2 — sections and elements · ~1.5 weeks · **SCHEMA + ADAPTER SHIPPED**
+### D · Template model v2 — sections and elements · ~1.5 weeks · **SHIPPED**
 
 **Goal:** the Coric-shaped model, expressed in the schema.
 
@@ -290,9 +290,42 @@ byte-identical to the pre-Phase-D renderer**, and every rendered page
 fingerprint differs by 0.0000%. The baseline is committed
 (`tests/golden/content_streams.json`) so the invariant holds going forward.
 
-**Still to do in D:** a resolver that fills `content` for a v2 template's
-bindings, and the renderer's fixed-band path (anchored elements inside a
-declared-height band). The tree and the schema both already describe them.
+**The binding resolver** (`renderers/bindings.py`) fills a v2 tree's
+content, and `display_spec.py` is the engine behind it: filter, sort,
+group, subtotal, cap. Two properties in it are load-bearing:
+
+- **A capped table still totals the whole portfolio.** The grand total is
+  taken over everything that survived the *filter*, before the row limit,
+  and the remainder row reconciles the difference. The first cut totalled
+  only the rows that fit, which told a client two thirds of their money
+  had gone missing — in a table that looked entirely normal.
+- **A pre-computed measure is never aggregated.** Adding two time-weighted
+  returns produces a number that is wrong and looks plausible, so the
+  subtotal cell is left blank. The schema already forbids such a field
+  from carrying an aggregation; this honours it at render time.
+
+Capping now happens *before* grouping. Doing it after put subtotal rows in
+the folded tail, so the remainder double-counted them and came out larger
+than the grand total — which is how the bug announced itself.
+
+**The fixed-band path** renders anchored elements inside a declared-height
+band, and `repeat_mode` works. Three findings, each probed rather than
+assumed:
+
+| Finding | Consequence |
+|---|---|
+| `position: fixed` repeats a band on every page | the mechanism for a page header or footer of arbitrary elements — `@page` margin boxes take simple content only |
+| **a page counter inside a repeating band freezes** | measured: every page of a seven-page document read "p 1 of 7". A `page_number` element is lifted into the `@page` margin box nearest where it was authored, the only place the counter resolves |
+| a pinned band's space must be reserved in the **page margin** | body padding reserves it once for the whole block, so the masthead cleared page one and landed on the table from page two onward |
+
+A repeating band pins to the top when it is the first section and the
+bottom when it is the last. That is the only reading the model supports —
+a repeating band in the middle of the flow has no page position to take —
+and `validate()` rejects that case rather than guessing.
+
+A v2 template draws its own masthead and footer, so the legacy page
+furniture is suppressed for it; the legacy path keeps it, and the
+content-stream baseline still holds byte-identical.
 
 ---
 
