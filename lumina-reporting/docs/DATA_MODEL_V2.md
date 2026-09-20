@@ -9,11 +9,17 @@ alongside today's schema and cut over deliberately.
 
 ## The decision this is built around
 
-**Lumina reports and displays finalized data, sourced from the warehouse
-(Snowflake).** It is not a book of record. It does not reconcile, does not
-derive positions from transactions, and does not calculate returns. It
-records that reconciliation happened upstream, and refuses to publish
-numbers carrying no attestation.
+**Lumina turns finalized warehouse data (Snowflake) into marketing-quality
+documents.** It calculates nothing — not accounting, not performance, not
+attribution. What it owns is three things:
+
+1. the **entity model** a document is bound to and grouped by
+2. the **semantic layer** that makes warehouse columns presentable
+3. the **provenance and publishing gate** that keeps unattested numbers
+   away from clients
+
+Reconciliation happens upstream. So does every number with a methodology
+behind it.
 
 That single choice removes a lot — no break tables, no custodian-vs-internal
 comparison, no break-resolution workflow — and adds one thing: a publishing
@@ -55,22 +61,29 @@ gate. See [Reconciliation as a contract](#reconciliation-as-a-contract).
               ║ pooled_fund       ║──► ShareClass ──► Instrument
               ║ model             ║──► CustodialAccount
               ╚═════════╤═════════╝
-                        │  every fact hangs here, portfolio_id NOT NULL
-   ┌────────┬───────────┼───────────┬────────────┬──────────────┐
-   ▼        ▼           ▼           ▼            ▼              ▼
-Position Transaction Valuation  CashFlow  PerformanceReturn  (FxRate)
-   │        │           │           │            │
-   └────────┴───────────┴───────────┴────────────┴──► DataLoad ──► DataSource
-                                                        │
-                                            reconciliation attestation
+                        │  dimension key on every cached row
+                        ▼
+              ┌──────────────────┐
+              │    DatasetRow    │◄── DataLoad ──► DataSource
+              │  (optional cache)│      │
+              └────────▲─────────┘   attestation
+                       │
+              ╔════════╧════════╗
+              ║     Dataset     ║  a named warehouse shape
+              ╚════════╤════════╝
+              ┌────────┴────────┐
+              ▼                 ▼
+        DatasetField      DisplaySpec
+      label, type,       group / sort /
+      format, role       filter / total / top-N
 ```
 
-`CompositeReturn` and `BenchmarkReturn` attach to `Composite` and `Benchmark`
-respectively, not to `Portfolio`.
+`BrandKit` sits beside all of it: firm default plus per-client override,
+resolved most-specific-first.
 
 ---
 
-## The five decisions that matter
+## The decisions that matter
 
 ### 1. Every pool of assets is a Portfolio — including funds
 
@@ -119,18 +132,72 @@ membership row would perform.
 `three_year_std_dev_pct`) that otherwise get typed into a template by hand
 and go stale.
 
-### 4. Returns are taken as delivered, not computed
+### 4. The fact layer is a semantic layer, not a star schema
 
-`method` (`twr` / `mwr` / `simple`) and `return_basis` (`gross` / `net`) are
-per-row, because one client pack legitimately shows several at once.
-Mislabelling one as another is a compliance problem, not a display bug.
+An earlier draft of v2 carried eight typed fact tables — `Position`,
+`Transaction`, `Valuation`, `CashFlow`, `PerformanceReturn`,
+`CompositeReturn`, `BenchmarkReturn`, `FxRate`. **They were the wrong
+shape.** A column for `unrealised_gain_loss` or `base_cost_basis` only earns
+its place if something computes with it, and Lumina computes nothing. All
+those columns bought was a migration every time a firm wanted to display
+something the schema hadn't anticipated.
 
-Lumina does not calculate returns. The firm's performance system owns the
-methodology, the flow timing and the large-flow policy; a second
-implementation inside a reporting tool would eventually disagree with the
-numbers the client was already sent.
+What replaced them:
 
-### 5. Tenant on every table
+| Table | Job |
+|---|---|
+| `Dataset` | a named, queryable shape from the warehouse — "Holdings", "Monthly Returns" |
+| `DatasetField` | one column plus the metadata that makes it presentable |
+| `DisplaySpec` | a saved group / sort / filter / subtotal / top-N recipe |
+| `DatasetRow` | an optional cache, for screens that can't afford a warehouse round trip |
+
+**Where the line sits.** Lumina aggregates for *display* — summing delivered
+market values into a sector total, counting holdings, taking a min or max.
+It does not derive financial metrics. A return, a contribution, an
+attribution effect, a cost basis: those carry methodology and must arrive
+already computed.
+
+That distinction is enforced, not just documented.
+`DatasetField.is_precomputed` marks a delivered measure, and a check
+constraint forbids it carrying an aggregation — averaging a column of
+returns is arithmetic nobody can defend, so the database refuses to let you
+configure it.
+
+### 5. Flexible display is first-class, not a rendering afterthought
+
+`DisplaySpec` makes "Top 10 holdings by weight", "grouped by sector with
+subtotals, sectors ordered by size" and "everything over 1%, sorted by
+country then name" three named, reusable specs over one dataset — each
+attachable to any template component.
+
+Its `group_by`, `sort_by`, `filters` and `totals` are JSON lists rather than
+columns because their arity is open: a spec may group by nothing or by three
+levels, and a fixed `group_by_1..3` would be both limiting and mostly null.
+
+`row_limit` pairs with `remainder_label` so a truncated table *says* it is
+truncated ("Other 43 holdings") instead of silently dropping the tail.
+
+`DatasetRow` is a star-schema fact row on purpose: real dimension FKs for
+the things worth grouping in SQL, `values` JSON for everything else. A firm
+adds a column to its warehouse view and it's displayable immediately, with
+no migration, while sector/portfolio grouping still runs as an indexed query
+rather than a JSON scan.
+
+### 6. Brand kits, because the deliverable is a marketing document
+
+`BrandKit` resolves most-specific-first: a firm default, overridden
+per client for white-labelled or sub-advised packs. It carries logo and
+cover assets by URI (not bytes — a multi-megabyte blob in a row every query
+touches is a tax on every page load), a colour palette including the
+CVD-safe categorical chart series, page setup, and typography.
+
+Typography carries a **separate numeric family**, which matters more than it
+sounds: figures in a holdings table need tabular (fixed-width) digits or the
+columns don't line up, and most brand body faces are proportional. Font
+asset URIs are stored too, so rendering doesn't silently substitute a
+fallback and change the document's look between environments.
+
+### 7. Tenant on every table
 
 `firm_id NOT NULL` everywhere except `firm` itself — never inferred through a
 join, because a row-level-security policy that has to traverse a join is a
@@ -171,12 +238,15 @@ rather than assumed.
 
 ## What is deliberately not here
 
-- **No reconciliation engine.** Per the decision above.
-- **No derived positions.** Lumina takes positions and transactions as given.
-- **No return calculation.** See decision 4.
-- **No NAV derivation.** `Valuation.total_market_value` is the administrator's
-  struck number. It is stored beside the positions, and a variance between
-  them is a signal Lumina can surface — never one it resolves.
+- **No reconciliation engine.**
+- **No accounting.** No cost basis, no realised/unrealised gain/loss, no NAV
+  derivation. Whatever the warehouse delivers is what gets displayed.
+- **No performance or attribution engine.** Returns, contributions and
+  attribution effects arrive pre-computed and are marked `is_precomputed` so
+  nothing re-aggregates them.
+- **No currency translation.** An earlier draft had an `FxRate` table;
+  translating is calculating. If a pack needs a second presentation currency,
+  the warehouse delivers it.
 - **No group-of-groups.** `ClientGroup` is one level deep. A `parent_id` is
   additive if it's ever needed; recursion in every roll-up query is not free.
 - **No attribution model.** Sector/factor attribution is a larger schema of
@@ -284,11 +354,12 @@ restated, which finalized warehouse data routinely is.
 3. **One firm per deployment, or true multi-tenant?** `firm_id` is present
    either way. If it's one firm per deployment, you never need the RLS
    policies and the column is just cheap insurance.
-4. **Does the warehouse hand you portfolio-level returns, or only
-   positions?** The schema takes returns as delivered. If Snowflake carries
-   positions and valuations but no return series, something has to compute
-   TWR — and doing it in Lumina contradicts decision 4 above. Worth
-   confirming before cutover, because it changes who owns the number.
+4. **Does the warehouse deliver every number a pack shows?** The schema
+   assumes yes. Anything a template needs that Snowflake doesn't carry —
+   a return series, a since-inception figure, a second presentation currency
+   — has to be added to a view upstream, because computing it here is the
+   one thing this design rules out. Worth walking one real factsheet
+   column-by-column against the warehouse before cutover.
 5. **How far back does Time Travel run on the relevant tables?** Snowflake's
    retention (1 day on standard, up to 90 on enterprise) bounds how long
    `source_as_of_timestamp` is actually re-runnable. Beyond that window the

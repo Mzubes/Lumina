@@ -23,10 +23,8 @@ from .benchmarks import Benchmark, BenchmarkComponent, PortfolioBenchmark  # noq
 from .composites import Composite, CompositeMembership  # noqa: F401
 from .governance import DataLoad, DataSource  # noqa: F401
 from .reporting import ReportDataBinding, ReportSnapshot  # noqa: F401
-from .facts import (  # noqa: F401
-    BenchmarkReturn, CashFlow, CompositeReturn, FxRate, PerformanceReturn,
-    Position, Transaction, Valuation,
-)
+from .datasets import Dataset, DatasetField, DatasetRow, DisplaySpec  # noqa: F401
+from .branding import BrandKit  # noqa: F401
 
 __all__ = [
     'Base', 'metadata',
@@ -38,6 +36,6 @@ __all__ = [
     'Composite', 'CompositeMembership',
     'DataSource', 'DataLoad',
     'ReportSnapshot', 'ReportDataBinding',
-    'Position', 'Transaction', 'Valuation', 'CashFlow',
-    'PerformanceReturn', 'CompositeReturn', 'BenchmarkReturn', 'FxRate',
+    'Dataset', 'DatasetField', 'DisplaySpec', 'DatasetRow',
+    'BrandKit',
 ]
