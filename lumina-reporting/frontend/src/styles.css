@@ -847,6 +847,61 @@ select { appearance: none; background-image: linear-gradient(45deg, transparent 
    row would start wrapping mid-label. */
 .report-mix-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 24px; }
 
+/* ---------- Audit Trail ---------- */
+.audit-console { border-left: 3px solid var(--brand); }
+.audit-console-head { display: flex; gap: 12px; align-items: flex-start; margin-bottom: 12px; }
+.audit-console-head svg { flex-shrink: 0; width: 20px; height: 20px; color: var(--brand); margin-top: 2px; }
+.audit-console-head h2 { margin: 0 0 2px; }
+.audit-console-head .panel-subtitle { margin: 0; }
+.audit-console-messages {
+  display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px;
+  max-height: 320px; overflow-y: auto;
+}
+
+.audit-table { display: flex; flex-direction: column; }
+.audit-row {
+  /* minmax(0,…) throughout so a long report title or detail wraps inside its
+     cell instead of widening the row past the panel. */
+  display: grid;
+  grid-template-columns:
+    minmax(0, .85fr) minmax(0, 1.15fr) minmax(0, .8fr)
+    minmax(0, 1.2fr) minmax(0, 1.5fr) minmax(0, 1.5fr);
+  gap: 12px; align-items: center;
+  padding: 11px 4px; border-bottom: 1px solid var(--panel-border); font-size: 13px;
+}
+.audit-row:last-child { border-bottom: none; }
+.audit-row-head { font-size: 11px; font-weight: 700; color: var(--ink-muted); text-transform: uppercase; letter-spacing: .05em; }
+/* The reference is the thing an auditor copies into a finding, so it gets a
+   monospace face and stays selectable at full length rather than truncating. */
+.audit-reference { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; color: var(--ink-secondary); }
+.audit-when { font-variant-numeric: tabular-nums; color: var(--ink-secondary); font-size: 12.5px; }
+.audit-actor, .audit-detail { color: var(--ink-secondary); overflow-wrap: anywhere; }
+.audit-target a { color: var(--brand); font-weight: 600; }
+
+.action-pill {
+  display: inline-block; padding: 3px 9px; border-radius: 999px;
+  font-size: 11px; font-weight: 700; white-space: nowrap; border: 1px solid transparent;
+}
+/* Reuses the workflow status tokens so an action's color means the same thing
+   here as the matching status badge does everywhere else in the app. */
+.action-pill.action-draft { background: color-mix(in srgb, var(--c-draft) 14%, transparent); color: var(--c-draft); border-color: color-mix(in srgb, var(--c-draft) 32%, transparent); }
+.action-pill.action-review { background: color-mix(in srgb, var(--c-review) 14%, transparent); color: var(--c-review); border-color: color-mix(in srgb, var(--c-review) 32%, transparent); }
+.action-pill.action-compliance { background: color-mix(in srgb, var(--c-compliance) 14%, transparent); color: var(--c-compliance); border-color: color-mix(in srgb, var(--c-compliance) 32%, transparent); }
+.action-pill.action-approved { background: color-mix(in srgb, var(--c-approved) 14%, transparent); color: var(--c-approved); border-color: color-mix(in srgb, var(--c-approved) 32%, transparent); }
+.action-pill.action-distributed { background: color-mix(in srgb, var(--c-distributed) 14%, transparent); color: var(--c-distributed); border-color: color-mix(in srgb, var(--c-distributed) 32%, transparent); }
+.action-pill.action-critical { background: color-mix(in srgb, var(--c-critical) 12%, transparent); color: var(--c-critical); border-color: color-mix(in srgb, var(--c-critical) 32%, transparent); }
+.action-pill.action-neutral { background: var(--page-bg-1); color: var(--ink-secondary); border-color: var(--panel-border-strong); }
+
+.filter-date { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ink-muted); margin: 0; }
+.filter-date input { width: auto; margin: 0; padding: 6px 10px; font-size: 12.5px; }
+
+@media (max-width: 1200px) {
+  /* Actor and the free-text detail are the two columns an auditor can
+     recover from the exported CSV, so they're the ones that go first. */
+  .audit-row { grid-template-columns: minmax(0, .9fr) minmax(0, 1.2fr) minmax(0, .8fr) minmax(0, 1.6fr); }
+  .audit-row > :nth-child(4), .audit-row > :nth-child(6) { display: none; }
+}
+
 /* ---------- Production Hub: health list, scorecard tables, deadlines ---------- */
 /* The tab switcher sits above the toolbar, so it needs a little more air
    beneath it than an inline preset switcher does. */
@@ -1277,25 +1332,68 @@ button.lumina-ai-fab svg { width: 22px; height: 22px; }
   display: flex; flex-direction: column; padding: 0; overflow: hidden;
   box-shadow: var(--shadow-lg);
 }
+/* Deep navy rather than the old brand tint: the panel floats over whatever
+   page is behind it, and a light header let it blur into the page it was
+   sitting on. Every colour inside the header is set explicitly, since the
+   surrounding light-surface tokens don't read on this ground. */
 .lumina-ai-panel-header {
   display: flex; align-items: flex-start; justify-content: space-between; gap: 10px;
-  padding: 16px 16px 14px; border-bottom: 1px solid var(--panel-border); background: var(--brand-tint);
+  padding: 16px 16px 14px; background: linear-gradient(135deg, #10193a, #1b2a5e);
+  border-bottom: 1px solid rgba(255, 255, 255, .08);
 }
-.lumina-ai-panel-title { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 14px; color: var(--brand-strong); }
-.lumina-ai-panel-title svg { width: 16px; height: 16px; }
-.lumina-ai-panel-subtitle { margin-top: 4px; font-size: 11.5px; color: var(--ink-muted); line-height: 1.4; max-width: 250px; }
+.lumina-ai-panel-title { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 14px; color: #fff; }
+.lumina-ai-panel-title svg { width: 16px; height: 16px; color: var(--brand-gradient-end); }
+.lumina-ai-panel-subtitle { margin-top: 4px; font-size: 11.5px; color: rgba(255, 255, 255, .62); line-height: 1.4; max-width: 250px; }
 button.lumina-ai-close {
   padding: 0; width: 24px; height: 24px; border-radius: 999px; background: transparent; border: none;
-  color: var(--ink-muted); font-size: 18px; line-height: 1; display: flex; align-items: center; justify-content: center;
+  color: rgba(255, 255, 255, .6); font-size: 18px; line-height: 1; display: flex; align-items: center; justify-content: center;
 }
-button.lumina-ai-close:hover { background: rgba(0,0,0,.06); color: var(--ink-primary); }
+button.lumina-ai-close:hover { background: rgba(255, 255, 255, .12); color: #fff; }
+
+/* Context chips: what the assistant can currently see. On the dark header
+   they're translucent; the Audit Trail console reuses the same class on a
+   light panel, hence the separate light-ground rule below. */
+.lumina-ai-chips { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 9px; }
+.lumina-ai-chip {
+  font-size: 10.5px; font-weight: 600; padding: 2px 8px; border-radius: 999px;
+  background: rgba(255, 255, 255, .12); color: rgba(255, 255, 255, .85);
+}
+.audit-console .lumina-ai-chips { margin: 0 0 12px; }
+.audit-console .lumina-ai-chip { background: var(--brand-tint); color: var(--brand-strong); }
 
 .lumina-ai-messages { flex: 1 1 auto; overflow-y: auto; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; }
 .lumina-ai-empty { font-size: 12.5px; color: var(--ink-muted); line-height: 1.5; }
-.lumina-ai-bubble { font-size: 13px; line-height: 1.5; padding: 9px 12px; border-radius: var(--radius-md); max-width: 88%; white-space: pre-wrap; }
+/* An assistant reply is now parsed into real elements, so it must NOT keep
+   pre-wrap -- that would double every gap between rendered paragraphs. Only
+   the user's own bubble, which is still raw text, wraps that way. */
+.lumina-ai-bubble { font-size: 13px; line-height: 1.5; padding: 9px 12px; border-radius: var(--radius-md); max-width: 88%; }
+.lumina-ai-bubble-user { white-space: pre-wrap; }
 .lumina-ai-bubble-user { align-self: flex-end; background: var(--brand); color: var(--brand-ink); }
 .lumina-ai-bubble-assistant { align-self: flex-start; background: var(--page-bg-1); color: var(--ink-primary); }
 .lumina-ai-thinking { color: var(--ink-muted); font-style: italic; }
+
+.assistant-reply-body > :first-child { margin-top: 0; }
+.assistant-reply-body > :last-child { margin-bottom: 0; }
+.assistant-reply-body p { margin: 0 0 8px; }
+.assistant-reply-body ul { margin: 0 0 8px; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; }
+
+/* Navigation only -- these are <Link>s to in-app paths the backend
+   allow-listed, never buttons that call an endpoint. Styled as links rather
+   than primary buttons so they don't read as "do the thing". */
+.assistant-actions { display: flex; flex-direction: column; gap: 4px; margin-top: 10px; }
+.assistant-action {
+  font-size: 12.5px; font-weight: 600; color: var(--brand);
+  padding: 5px 9px; border-radius: var(--radius-sm); background: var(--brand-tint);
+}
+.assistant-action:hover { background: color-mix(in srgb, var(--brand) 16%, transparent); }
+
+.assistant-followups { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 10px; align-items: center; }
+.assistant-followups-label { flex-basis: 100%; font-size: 10.5px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--ink-muted); }
+button.assistant-followup {
+  font-size: 11.5px; font-weight: 600; padding: 4px 10px; border-radius: 999px;
+  background: #fff; color: var(--ink-secondary); border: 1px solid var(--panel-border-strong);
+}
+button.assistant-followup:hover { background: var(--brand-tint); color: var(--brand); border-color: color-mix(in srgb, var(--brand) 34%, transparent); }
 
 .lumina-ai-input-row { display: flex; gap: 8px; padding: 12px 14px; border-top: 1px solid var(--panel-border); }
 .lumina-ai-input-row input { flex: 1 1 auto; }

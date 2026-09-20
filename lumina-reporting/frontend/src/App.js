@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { HashRouter, NavLink, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
-import ActivityLog from './components/ActivityLog';
+import AuditTrail from './components/AuditTrail';
 import Dashboard from './components/Dashboard';
 import ClientProfile from './components/ClientProfile';
 import Clients from './components/clients';
@@ -64,7 +64,7 @@ const navSections = [
   { label: 'Admin', items: [
     ['/clients', 'Clients & Contacts', IconBriefcase, STAFF_ROLES],
     ['/disclosures', 'Disclosures', IconClipboard, STAFF_ROLES],
-    ['/activity', 'Activity Log', IconShield, STAFF_ROLES],
+    ['/audit-trail', 'Audit Trail', IconShield, STAFF_ROLES],
     ['/users', 'Users & Roles', IconUserGear, ['admin']],
     ['/workflow-groups', 'Workflow Groups', IconWorkflow, ['admin']],
   ] },
@@ -224,7 +224,9 @@ function AuthenticatedShell() {
           <Route path="/pitch-books" element={<RequireAuth><Pitchbooks /></RequireAuth>} />
           <Route path="/clients" element={<RequireAuth><Clients /></RequireAuth>} />
           <Route path="/disclosures" element={<RequireAuth><Disclosures /></RequireAuth>} />
-          <Route path="/activity" element={<RequireAuth><ActivityLog /></RequireAuth>} />
+          <Route path="/audit-trail" element={<RequireAuth><AuditTrail /></RequireAuth>} />
+          {/* Retired path -- keep old links and bookmarks working. */}
+          <Route path="/activity" element={<Navigate to="/audit-trail" replace />} />
           <Route path="/users" element={<RequireAuth><Users /></RequireAuth>} />
           <Route path="/workflow-groups" element={<RequireAuth><WorkflowGroups /></RequireAuth>} />
           <Route path="/client-portal" element={<RequireAuth><ClientPortal /></RequireAuth>} />

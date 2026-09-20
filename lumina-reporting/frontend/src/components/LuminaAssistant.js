@@ -1,7 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
-import { apiFetch, isDemoMode } from '../api';
 import { LUMINA_ASK_EVENT } from '../luminaAskBus';
+import useLuminaAsk from '../useLuminaAsk';
+import AssistantReply from './AssistantReply';
 import { IconSparkle } from '../icons';
 
 // Page label + (when on a report) the report id the assistant should ground
@@ -14,24 +15,21 @@ const pageLabelFromPath = (pathname) => {
     '/': 'Production Hub', '/data-hub': 'Data Hub', '/data-sources': 'Data Sources',
     '/templates': 'Templates', '/reports': 'Reports', '/queue': 'My Queue',
     '/marketing': 'Fact Sheets & Marketing', '/pitch-books': 'Pitch Books & Meeting Packs',
-    '/clients': 'Clients & Contacts', '/disclosures': 'Disclosures', '/activity': 'Activity Log',
+    '/clients': 'Clients & Contacts', '/disclosures': 'Disclosures', '/audit-trail': 'Audit Trail',
     '/users': 'Users & Roles', '/workflow-groups': 'Workflow Groups',
     '/client-portal': 'Client Portal', '/internal-portal': 'Internal Portal',
   };
   return { label: labels[pathname] || pathname, reportId: null };
 };
 
-const demoReply = "I'm running on demo data right now, so I can't call out to Claude -- but " +
-  "once ANTHROPIC_API_KEY is set, I'll answer grounded in your firm's real book of business, " +
-  "report statuses, and templates, right from wherever you're working in Lumina.";
-
 const LuminaAssistant = () => {
   const location = useLocation();
   const [open, setOpen] = useState(false);
-  const [messages, setMessages] = useState([]);
   const [draft, setDraft] = useState('');
-  const [sending, setSending] = useState(false);
-  const [error, setError] = useState('');
+  // Request/response handling is shared with the Audit Trail's inline
+  // console -- see useLuminaAsk. Only the chrome below is specific to the
+  // corner panel.
+  const { messages, sending, error, contextSummary, ask } = useLuminaAsk();
   // Ids another page asked the assistant to ground its answer in. Cleared
   // when the panel closes, so a question typed later isn't silently
   // answered about a client the user has since navigated away from.
@@ -56,40 +54,20 @@ const LuminaAssistant = () => {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
   }, [messages, open]);
 
-  const send = async (event) => {
-    event.preventDefault();
-    const text = draft.trim();
+  const submit = (text) => {
     if (!text || sending) return;
     const { label, reportId } = pageLabelFromPath(location.pathname);
-
-    setMessages((current) => [...current, { role: 'user', text }]);
     setDraft('');
-    setError('');
-    setSending(true);
-
-    try {
-      if (isDemoMode) {
-        await new Promise((resolve) => setTimeout(resolve, 400));
-        setMessages((current) => [...current, { role: 'assistant', text: demoReply }]);
-      } else {
-        const result = await apiFetch('/api/ai/ask', {
-          method: 'POST',
-          body: JSON.stringify({
-            message: text, page: label,
-            // A page-seeded id wins over the one inferred from the URL: the
-            // user explicitly asked about that record.
-            reportId: seededContext?.reportId ?? reportId,
-            clientId: seededContext?.clientId ?? null,
-          }),
-        });
-        setMessages((current) => [...current, { role: 'assistant', text: result.reply, configured: result.configured }]);
-      }
-    } catch (requestError) {
-      setError(requestError.message);
-    } finally {
-      setSending(false);
-    }
+    ask(text, {
+      page: label,
+      // A page-seeded id wins over the one inferred from the URL: the user
+      // explicitly asked about that record.
+      reportId: seededContext?.reportId ?? reportId,
+      clientId: seededContext?.clientId ?? null,
+    });
   };
+
+  const send = (event) => { event.preventDefault(); submit(draft.trim()); };
 
   return (
     <div className="lumina-ai">
@@ -99,6 +77,16 @@ const LuminaAssistant = () => {
             <div>
               <div className="lumina-ai-panel-title"><IconSparkle /><span>Lumina AI</span></div>
               <div className="lumina-ai-panel-subtitle">Grounded in your firm's real data. Always human-reviewed before anything is sent.</div>
+              {/* What the assistant can currently see, computed server-side
+                  alongside the answer so the chip and the reply always
+                  describe the same snapshot. */}
+              {contextSummary && (
+                <div className="lumina-ai-chips">
+                  {contextSummary.split(' · ').map(chip => (
+                    <span key={chip} className="lumina-ai-chip">{chip}</span>
+                  ))}
+                </div>
+              )}
             </div>
             <button
               type="button" className="lumina-ai-close"
@@ -114,9 +102,9 @@ const LuminaAssistant = () => {
               </div>
             )}
             {messages.map((message, index) => (
-              <div key={index} className={`lumina-ai-bubble lumina-ai-bubble-${message.role}`}>
-                {message.text}
-              </div>
+              message.role === 'assistant'
+                ? <AssistantReply key={index} message={message} onFollowUp={submit} />
+                : <div key={index} className="lumina-ai-bubble lumina-ai-bubble-user">{message.text}</div>
             ))}
             {sending && <div className="lumina-ai-bubble lumina-ai-bubble-assistant lumina-ai-thinking">Thinking…</div>}
           </div>
