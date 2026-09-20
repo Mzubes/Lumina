@@ -1,8 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { apiDownload, apiFetch, fireReportAction, isDemoMode } from '../api';
 import ReportsTable, { statusBreakdown } from './ReportsTable';
-import { buildQuery, emptyFilters } from './reports';
+import { CONTENT_TYPE_GROUPS, buildQuery, emptyFilters } from './reports';
 import CompositionBar from './charts/CompositionBar';
+
+// The one definition of which report types this page is about, shared with
+// the Reports page's "Marketing" content filter so the two can't diverge.
+const MARKETING_TYPE_VALUES = CONTENT_TYPE_GROUPS.find(g => g.value === 'marketing').types;
 
 const MARKETING_TYPES = { factsheet: 'Factsheet', marketing: 'Marketing Material' };
 
@@ -35,7 +39,7 @@ const Marketing = () => {
   const loadReports = () => {
     if (isDemoMode) { setReports(demoMarketing); return; }
     apiFetch(`/api/reports${buildQuery(filters)}`)
-      .then(all => setReports(all.filter(r => r.report_type === 'factsheet' || r.report_type === 'marketing')))
+      .then(all => setReports(all.filter(r => MARKETING_TYPE_VALUES.includes(r.report_type))))
       .catch(() => setReports(demoMarketing));
   };
 

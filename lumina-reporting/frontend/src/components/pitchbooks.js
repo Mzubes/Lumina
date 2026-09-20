@@ -2,6 +2,11 @@ import React, { useEffect, useState } from 'react';
 import { apiDownload, apiFetch, fireReportAction, isDemoMode } from '../api';
 import ReportsTable, { statusBreakdown } from './ReportsTable';
 import CompositionBar from './charts/CompositionBar';
+import { CONTENT_TYPE_GROUPS } from './reports';
+
+// Shared with the Reports page's "Sales presentations" content filter -- one
+// definition of which report types belong to this page.
+const PACK_TYPE_VALUES = CONTENT_TYPE_GROUPS.find(g => g.value === 'salesPresentations').types;
 
 const PACK_TYPES = { pitchbook: 'Pitch Book', meeting_pack: 'Meeting Pack' };
 
@@ -41,7 +46,7 @@ const Pitchbooks = () => {
   const loadReports = () => {
     if (isDemoMode) { setReports(demoPitchbooks); return; }
     apiFetch('/api/reports')
-      .then(all => setReports(all.filter(r => r.report_type === 'pitchbook' || r.report_type === 'meeting_pack')))
+      .then(all => setReports(all.filter(r => PACK_TYPE_VALUES.includes(r.report_type))))
       .catch(() => setReports(demoPitchbooks));
   };
 
@@ -56,7 +61,7 @@ const Pitchbooks = () => {
   useEffect(() => {
     if (isDemoMode || !form.client_id) { setClientReports([]); return; }
     apiFetch(`/api/reports?client_id=${form.client_id}`)
-      .then(all => setClientReports(all.filter(r => r.template_id && r.report_type !== 'pitchbook' && r.report_type !== 'meeting_pack')))
+      .then(all => setClientReports(all.filter(r => r.template_id && !PACK_TYPE_VALUES.includes(r.report_type))))
       .catch(() => setClientReports([]));
   }, [form.client_id]);
 

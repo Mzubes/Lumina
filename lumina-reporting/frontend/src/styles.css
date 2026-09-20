@@ -772,6 +772,18 @@ select { appearance: none; background-image: linear-gradient(45deg, transparent 
 .filter-search { width: auto; min-width: 180px; margin: 0; flex: 1 1 180px; max-width: 260px; }
 .filter-clear { background: transparent; border: 1px solid var(--panel-border-strong); color: var(--ink-secondary); padding: 7px 12px; font-size: 12.5px; }
 .filter-clear:hover { background: var(--page-bg-1); color: var(--ink-primary); }
+/* The content-type row sits on its own line above the status pills -- it's a
+   coarser cut ("what kind of thing is this") than the status pills' stage of
+   production, and mixing the two vocabularies into one wrapping row reads as
+   a single flat list of unrelated choices. */
+.filter-pills-content {
+  flex-basis: 100%; padding-bottom: 10px; margin-bottom: 2px;
+  border-bottom: 1px solid var(--panel-border);
+}
+
+/* Two composition bars side by side; stacks below the point where a legend
+   row would start wrapping mid-label. */
+.report-mix-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 24px; }
 
 /* ---------- view tabs (dashboard preset switcher) ---------- */
 .view-tabs { display: flex; gap: 4px; padding: 4px; border-radius: 999px; background: var(--page-bg-1); width: fit-content; margin-bottom: 18px; }

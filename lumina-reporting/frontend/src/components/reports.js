@@ -29,6 +29,35 @@ export const REPORT_TYPE_LABELS = {
   custom: 'Custom',
 };
 
+// The three ways the firm actually talks about its output, over the flat
+// report_type vocabulary above. These aren't new categories -- they're the
+// groupings the Fact Sheets & Marketing and Pitch Books pages already scope
+// themselves to, named once here so a "Marketing" pill on this page and the
+// Marketing page itself can never come to mean different sets.
+export const CONTENT_TYPE_GROUPS = [
+  { value: 'clientReports', label: 'Client reporting', types: ['performance', 'holdings', 'custom'] },
+  { value: 'marketing', label: 'Marketing', types: ['factsheet', 'marketing'] },
+  { value: 'salesPresentations', label: 'Sales presentations', types: ['pitchbook', 'meeting_pack'] },
+];
+
+// A report with no report_type set belongs to no group -- it's counted as
+// Unclassified rather than quietly filed under client reporting, because
+// nothing in the data says that's what it is.
+export const groupForReportType = (reportType) =>
+  CONTENT_TYPE_GROUPS.find(group => group.types.includes(reportType));
+
+export const contentTypeBreakdown = (reports) => {
+  const rows = CONTENT_TYPE_GROUPS.map((group, index) => ({
+    label: group.label,
+    value: reports.filter(report => group.types.includes(report.report_type)).length,
+    color: `var(--cat-${index + 1})`,
+  }));
+  const unclassified = reports.filter(report => !groupForReportType(report.report_type)).length;
+  return unclassified > 0
+    ? [...rows, { label: 'Unclassified', value: unclassified, color: 'var(--cat-other)' }]
+    : rows;
+};
+
 export const emptyFilters = {
   status: '', client_id: '', team: '', report_type: '', asset_class: '', q: '', stuck: '', overdue: '',
 };
@@ -78,6 +107,11 @@ const Reports = () => {
   const location = useLocation();
   const [filters, setFilters] = useState(() => filtersFromSearch(location.search));
   const [searchInput, setSearchInput] = useState('');
+  // Deliberately not part of `filters`: this one is applied to the already-
+  // fetched list in the browser, and `filters` is what buildQuery sends to
+  // the API. Keeping it separate stops a query param the backend doesn't
+  // know from riding along.
+  const [contentType, setContentType] = useState('');
   const [facets, setFacets] = useState({ teams: [], reportTypes: [], assetClasses: [] });
   const [clients, setClients] = useState([]);
   const [templates, setTemplates] = useState([]);
@@ -119,13 +153,21 @@ const Reports = () => {
   }, [searchInput]);
 
   const updateFilter = (key, value) => setFilters(current => ({ ...current, [key]: value }));
-  const clearFilters = () => { setFilters(emptyFilters); setSearchInput(''); };
-  const filtersActive = Object.values(filters).some(Boolean);
+  const clearFilters = () => { setFilters(emptyFilters); setSearchInput(''); setContentType(''); };
+  const filtersActive = Object.values(filters).some(Boolean) || Boolean(contentType);
+
+  // Everything below this line renders `visibleReports`, not `reports` --
+  // the charts, the table, the selection and the bulk bar all have to agree
+  // on one list, or the "Status mix" would describe rows that aren't shown.
+  const contentTypes = CONTENT_TYPE_GROUPS.find(group => group.value === contentType)?.types;
+  const visibleReports = contentTypes
+    ? reports.filter(report => contentTypes.includes(report.report_type))
+    : reports;
 
   // The selection is a set of report ids -- once the filtered list changes,
   // a previously-selected id may no longer be on screen, so drop the
   // selection rather than let it point at rows the user can't see.
-  useEffect(() => { setSelectedIds(new Set()); }, [reports]);
+  useEffect(() => { setSelectedIds(new Set()); }, [reports, contentType]);
 
   const applyView = (view) => { setFilters(view.filters); setSearchInput(view.filters.q || ''); };
   const removeView = (viewId) => {
@@ -147,9 +189,9 @@ const Reports = () => {
     if (next.has(id)) next.delete(id); else next.add(id);
     return next;
   });
-  const toggleSelectAll = (checked) => setSelectedIds(checked ? new Set(reports.map(r => r.id)) : new Set());
+  const toggleSelectAll = (checked) => setSelectedIds(checked ? new Set(visibleReports.map(r => r.id)) : new Set());
 
-  const selectedReports = reports.filter(r => selectedIds.has(r.id));
+  const selectedReports = visibleReports.filter(r => selectedIds.has(r.id));
   // A bulk action only makes sense when every selected report can legally
   // take it right now -- intersect by label (not by getReportActions' raw
   // key) since a diagram-backed report's key is an edge_id, which is only
@@ -259,10 +301,18 @@ const Reports = () => {
         </section>
       )}
 
-      {reports.length > 0 && (
+      {visibleReports.length > 0 && (
         <section className="panel">
-          <div className="panel-header"><h2>Status mix</h2></div>
-          <CompositionBar title="Status mix" data={statusBreakdown(reports)} />
+          <div className="report-mix-grid">
+            <div>
+              <div className="panel-header"><h2>Status mix</h2></div>
+              <CompositionBar title="Status mix" data={statusBreakdown(visibleReports)} />
+            </div>
+            <div>
+              <div className="panel-header"><h2>Content mix</h2></div>
+              <CompositionBar title="Content mix" data={contentTypeBreakdown(visibleReports)} />
+            </div>
+          </div>
         </section>
       )}
 
@@ -285,6 +335,23 @@ const Reports = () => {
           )}
         </div>
         <div className="filter-bar">
+          <div className="filter-pills filter-pills-content">
+            <button
+              type="button" className={`filter-pill ${contentType === '' ? 'active' : ''}`}
+              onClick={() => setContentType('')}
+            >
+              All content
+            </button>
+            {CONTENT_TYPE_GROUPS.map(group => (
+              <button
+                key={group.value} type="button"
+                className={`filter-pill ${contentType === group.value ? 'active' : ''}`}
+                onClick={() => setContentType(group.value)}
+              >
+                {group.label}
+              </button>
+            ))}
+          </div>
           <div className="filter-pills">
             {filters.stuck === '1' && (
               <button
@@ -357,7 +424,7 @@ const Reports = () => {
         {bulkMessage && <p className="form-message form-message-success">{bulkMessage}</p>}
 
         <ReportsTable
-          reports={reports} role={role} onAction={handleAction} onExport={handleExport}
+          reports={visibleReports} role={role} onAction={handleAction} onExport={handleExport}
           selectable selectedIds={selectedIds} onToggleSelect={toggleSelect} onToggleSelectAll={toggleSelectAll}
         />
       </section>
