@@ -17,11 +17,13 @@ import json
 from flask import Blueprint, g, jsonify, request
 from sqlalchemy import select
 
+from bindings_catalogue import build_catalogue
 from database import db_session
 from renderers.layout import validate
 from routes.auth import require_auth
 from schema_v2 import DocumentTemplate, Firm, TemplateElement, TemplateSection
-from schema_v2.styling import option_problems, style_problems
+from schema_v2.styling import (binding_problems, option_problems,
+                               style_problems)
 from schema_v2.templates import (BINDING_KINDS, BREAK_RULES, ELEMENT_TYPES,
                                  LAYOUT_MODES, ORIENTATIONS, PAGE_SIZES,
                                  REPEAT_MODES, SYSTEM_BINDINGS)
@@ -158,6 +160,7 @@ def _validation_error(payload):
                 problems.append(f"{where}: unknown system binding {key!r}")
             problems.extend(style_problems(element.get('style_token'), where))
             problems.extend(option_problems(element.get('options'), where))
+            problems.extend(binding_problems(element, where))
 
     # The renderer's own check, on the same shape it will later draw.
     # `validate` indexes the keys it needs rather than getting them, so the
@@ -177,6 +180,18 @@ def _validation_error(payload):
         for index, section in enumerate(payload.get('sections') or [])
     ]))
     return '; '.join(dict.fromkeys(problems)) or None
+
+
+@document_templates_blueprint.get('/api/bindings')
+@require_auth(roles=['admin', 'editor', 'viewer'])
+def list_bindings():
+    """What an element can be bound to, with a sample of what it would show.
+
+    Served whole rather than per-dataset: the inspector needs it on every
+    selection, and a firm's semantic layer is small enough that one call
+    beats a request per dropdown.
+    """
+    return jsonify(build_catalogue(db_session, _firm_id()))
 
 
 @document_templates_blueprint.get('/api/document-templates')

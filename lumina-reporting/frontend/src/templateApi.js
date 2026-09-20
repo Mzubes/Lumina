@@ -91,6 +91,11 @@ export const fromApiTemplate = (payload) => ({
 
 export const listTemplates = () => apiFetch(TEMPLATES);
 
+// What an element can be bound to, with a sample of what it would show.
+// Fetched once per canvas load rather than per selection: a firm's
+// semantic layer is small, and the inspector needs it on every click.
+export const loadBindings = () => apiFetch('/api/bindings');
+
 export const loadTemplate = (id) =>
   apiFetch(`${TEMPLATES}/${id}`).then(fromApiTemplate);
 

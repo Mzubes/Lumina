@@ -1,6 +1,9 @@
 import React from 'react';
 
 import {
+  BINDING_KINDS, EMPTY_CATALOGUE, bindingPatch, previewFor,
+} from '../../bindings';
+import {
   BORDERS, BREAK_RULES, CHART_KINDS, FILLS, LAYOUT_MODES, OPTION_VOCABULARIES,
   REPEAT_MODES, STYLE_TOKENS, controlsFor,
 } from '../../elementStyles';
@@ -50,11 +53,120 @@ const Choice = ({ label, value, options, onChange, onBegin, empty = 'Default' })
   </label>
 );
 
-const ElementProperties = ({ element, editor }) => {
+// E4. Which kinds a type can take: a table or a chart reads a whole result
+// set, a field reads one value, and a rule reads nothing. Offering
+// `display_spec` on a text element would let an author bind a table's worth
+// of rows to a box that draws one line.
+const kindsFor = (elementType) => {
+  if (elementType === 'table' || elementType === 'chart') {
+    return BINDING_KINDS.filter(kind => ['none', 'display_spec'].includes(kind.value));
+  }
+  if (elementType === 'field') {
+    return BINDING_KINDS.filter(kind => ['system', 'dataset_field'].includes(kind.value));
+  }
+  if (elementType === 'text') {
+    return BINDING_KINDS.filter(kind => ['none', 'system'].includes(kind.value));
+  }
+  return null;   // line, box, image, page_number -- nothing to bind
+};
+
+const BindingBlock = ({ element, editor, catalogue }) => {
+  const kinds = kindsFor(element.element_type);
+  if (!kinds) return null;
+
+  const begin = editor.begin;
+  const kind = element.binding_kind || 'none';
+  const apply = (patch) => { begin(); editor.setElement(element.id, patch); };
+  const preview = previewFor(element, catalogue);
+
+  const fields = (catalogue.datasets || []).flatMap(dataset =>
+    (dataset.fields || []).map(field => ({
+      value: field.id, label: `${dataset.name} · ${field.name}`,
+    })));
+  const specs = (catalogue.datasets || []).flatMap(dataset =>
+    (dataset.display_specs || []).map(spec => ({
+      value: spec.id, label: `${dataset.name} · ${spec.name}`,
+    })));
+
+  return (
+    <>
+      <h3 className="inspector-heading">Data</h3>
+      <label className="inspector-field">
+        <span>Source</span>
+        <select value={kind} onFocus={begin}
+                onChange={(event) => apply(bindingPatch(event.target.value))}>
+          {kinds.map(entry => (
+            <option key={entry.value} value={entry.value}>{entry.label}</option>
+          ))}
+        </select>
+      </label>
+
+      {kind === 'system' && (
+        <label className="inspector-field">
+          <span>Value</span>
+          <select value={element.binding_key || ''} onFocus={begin}
+                  onChange={(e) => apply(bindingPatch('system', e.target.value || null))}>
+            <option value="">Choose…</option>
+            {(catalogue.system || []).map(entry => (
+              <option key={entry.key} value={entry.key}>{entry.label}</option>
+            ))}
+          </select>
+        </label>
+      )}
+
+      {kind === 'dataset_field' && (
+        <label className="inspector-field">
+          <span>Field</span>
+          <select value={element.dataset_field_id || ''} onFocus={begin}
+                  onChange={(e) => apply(
+                    bindingPatch('dataset_field', Number(e.target.value) || null))}>
+            <option value="">Choose…</option>
+            {fields.map(entry => (
+              <option key={entry.value} value={entry.value}>{entry.label}</option>
+            ))}
+          </select>
+        </label>
+      )}
+
+      {kind === 'display_spec' && (
+        <label className="inspector-field">
+          <span>Spec</span>
+          <select value={element.display_spec_id || ''} onFocus={begin}
+                  onChange={(e) => apply(
+                    bindingPatch('display_spec', Number(e.target.value) || null))}>
+            <option value="">Choose…</option>
+            {specs.map(entry => (
+              <option key={entry.value} value={entry.value}>{entry.label}</option>
+            ))}
+          </select>
+        </label>
+      )}
+
+      {kind !== 'none' && preview.text && (
+        <p className={`inspector-sample${preview.isReal ? '' : ' is-sample'}`}>
+          <strong>{preview.text}</strong>
+          {preview.note && <i>{preview.note}</i>}
+        </p>
+      )}
+
+      {kind !== 'none' && !fields.length && kind === 'dataset_field' && (
+        <p className="panel-subtitle">
+          No datasets yet — run <code>flask seed-demo</code>, or load one from a
+          data source.
+        </p>
+      )}
+    </>
+  );
+};
+
+const ElementProperties = ({ element, editor, catalogue }) => {
   const begin = editor.begin;
   const set = (patch) => editor.setElement(element.id, patch);
   const option = (key) => (value) => editor.setElementOption(element.id, key, value);
   const can = controlsFor(element.element_type);
+  // A bound element draws its binding, not its words, so the text box
+  // would be a control with no effect.
+  const bound = (element.binding_kind || 'none') !== 'none';
   const options = element.options || {};
 
   return (
@@ -77,7 +189,9 @@ const ElementProperties = ({ element, editor }) => {
                  onChange={(h_mm) => set({ h_mm })} />
       </div>
 
-      {can.staticText && (
+      <BindingBlock element={element} editor={editor} catalogue={catalogue} />
+
+      {can.staticText && !bound && (
         <label className="inspector-field inspector-field-wide">
           <span>Text</span>
           <textarea
@@ -187,7 +301,7 @@ const SectionProperties = ({ section, editor }) => {
   );
 };
 
-const Inspector = ({ editor, section }) => {
+const Inspector = ({ editor, section, catalogue = EMPTY_CATALOGUE }) => {
   const { template, selection } = editor;
   const selected = selection.length === 1
     ? template.sections.flatMap(s => s.elements).find(element => element.id === selection[0])
@@ -200,7 +314,7 @@ const Inspector = ({ editor, section }) => {
       </h2>
 
       {selected
-        ? <ElementProperties element={selected} editor={editor} />
+        ? <ElementProperties element={selected} editor={editor} catalogue={catalogue} />
         : selection.length > 1
           ? (
             <p className="panel-subtitle">

@@ -20,7 +20,8 @@ fixtures.
 
 import json
 
-from schema_v2.styling import option_problems, style_problems
+from schema_v2.styling import (binding_problems, option_problems,
+                               style_problems)
 from schema_v2.templates import ELEMENT_TYPES, LAYOUT_MODES
 
 # A4 portrait at the default margins. The legacy path has no template row to
@@ -194,6 +195,7 @@ def validate(tree):
             where = f"section {section['ordinal']}"
             problems.extend(style_problems(element.get('style_token'), where))
             problems.extend(option_problems(element.get('options'), where))
+            problems.extend(binding_problems(element, where))
 
     for index, section in enumerate(tree):
         if section.get('repeat_mode', 'none') == 'none':

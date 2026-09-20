@@ -34,6 +34,22 @@ export const BORDERS = ['none', 'top', 'bottom', 'box'];
 export const FILLS = ['none', 'tint', 'tint-strong', 'accent-tint'];
 export const CHART_KINDS = ['bar', 'bar_comparison', 'composition', 'donut', 'line', 'area'];
 
+// --- bindings (schema_v2/styling.py, schema_v2/templates.py) ----------
+// Which column each binding kind carries. The others must be null: the
+// database enforces it with a check constraint, and the API reports a
+// violation rather than raising.
+export const BINDING_COLUMNS = {
+  none: null,
+  system: 'binding_key',
+  dataset_field: 'dataset_field_id',
+  display_spec: 'display_spec_id',
+};
+
+export const SYSTEM_BINDINGS = [
+  'client_name', 'portfolio_name', 'report_title', 'as_of_date',
+  'generated_at', 'page_number', 'page_count', 'firm_name',
+];
+
 // --- band vocabulary (schema_v2/templates.py) -------------------------
 export const LAYOUT_MODES = ['flow', 'fixed'];
 export const REPEAT_MODES = ['none', 'every_page', 'first_page', 'except_first_page'];

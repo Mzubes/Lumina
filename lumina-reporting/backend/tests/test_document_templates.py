@@ -231,6 +231,32 @@ def test_an_unknown_system_binding_is_refused(client, auth_headers):
     assert 'client_tax_id' in response.get_json()['message']
 
 
+def test_a_binding_carrying_two_columns_is_a_400_not_a_500(client, auth_headers):
+    """The database refuses this with a check constraint, which would
+    surface as an IntegrityError and a 500. The API says what is wrong."""
+    payload = _tree()
+    payload['sections'][0]['elements'][1]['dataset_field_id'] = 7   # already a system binding
+    response = client.post('/api/document-templates', json=payload, headers=auth_headers)
+    assert response.status_code == 400
+    assert 'must not carry dataset_field_id' in response.get_json()['message']
+
+
+def test_a_binding_missing_what_its_kind_needs_is_refused(client, auth_headers):
+    payload = _tree()
+    payload['sections'][0]['elements'][1]['binding_key'] = None
+    response = client.post('/api/document-templates', json=payload, headers=auth_headers)
+    assert response.status_code == 400
+    assert 'needs binding_key' in response.get_json()['message']
+
+
+def test_an_unbound_element_must_carry_no_binding_column(client, auth_headers):
+    payload = _tree()
+    payload['sections'][0]['elements'][0]['display_spec_id'] = 3
+    response = client.post('/api/document-templates', json=payload, headers=auth_headers)
+    assert response.status_code == 400
+    assert 'must not carry display_spec_id' in response.get_json()['message']
+
+
 def test_every_problem_in_one_reply(client, auth_headers):
     payload = _tree()
     payload['sections'][0]['elements'][0]['style_token'] = 'color: red'

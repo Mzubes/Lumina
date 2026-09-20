@@ -1,6 +1,7 @@
 import React from 'react';
 
 import { HANDLES } from '../../canvasGeometry';
+import { EMPTY_CATALOGUE, previewFor } from '../../bindings';
 import { elementClasses } from '../../elementStyles';
 
 // One element, anchored in millimetres inside its band.
@@ -15,49 +16,55 @@ export const ELEMENT_LABELS = {
   people_grid: 'People grid',
 };
 
-const preview = (element) => {
-  if (element.static_text) return element.static_text;
-  if (element.binding_kind === 'system') return `{${element.binding_key}}`;
-  if (element.binding_kind === 'display_spec') return 'Bound to a display spec';
-  if (element.binding_kind === 'dataset_field') return 'Bound to a field';
-  return ELEMENT_LABELS[element.element_type] || element.element_type;
-};
+const CanvasElement = ({
+  element, isSelected, catalogue = EMPTY_CATALOGUE, onPointerDown, onHandlePointerDown,
+}) => {
+  // What this element would actually draw. A bound element shows the value
+  // from the catalogue rather than the word "bound", which is the whole
+  // point of E4: an author lays out against the real string length.
+  const preview = previewFor(element, catalogue);
+  const body = preview.text ?? (ELEMENT_LABELS[element.element_type] || element.element_type);
 
-const CanvasElement = ({ element, isSelected, onPointerDown, onHandlePointerDown }) => (
-  <div
-    // The same classes the renderer resolves from this element's token
-    // and options -- see elementStyles.js. The canvas's own stylesheet
-    // gives them screen equivalents, so a heading looks like a heading
-    // here for the same reason it does in the PDF.
-    className={[
-      'canvas-el', `canvas-el-${element.element_type}`,
-      ...elementClasses(element),
-      isSelected ? 'is-selected' : '',
-      element.is_visible === false ? 'is-hidden' : '',
-    ].filter(Boolean).join(' ')}
-    style={{
-      left: `${element.x_mm}mm`, top: `${element.y_mm}mm`,
-      width: `${element.w_mm}mm`, height: `${element.h_mm}mm`,
-      zIndex: element.z_index,
-    }}
-    onPointerDown={(event) => onPointerDown(event, element)}
-    role="button"
-    tabIndex={0}
-    aria-pressed={isSelected}
-    aria-label={`${ELEMENT_LABELS[element.element_type] || element.element_type} element`}
-    data-element-id={element.id}
-  >
-    <span className="canvas-el-body">{preview(element)}</span>
-    {isSelected && HANDLES.map(handle => (
-      <span
-        key={handle}
-        className={`canvas-handle canvas-handle-${handle}`}
-        data-handle={handle}
-        onPointerDown={(event) => onHandlePointerDown(event, element, handle)}
-        aria-hidden="true"
-      />
-    ))}
-  </div>
-);
+  return (
+    <div
+      // The same classes the renderer resolves from this element's token
+      // and options -- see elementStyles.js. The canvas's own stylesheet
+      // gives them screen equivalents, so a heading looks like a heading
+      // here for the same reason it does in the PDF.
+      className={[
+        'canvas-el', `canvas-el-${element.element_type}`,
+        ...elementClasses(element),
+        isSelected ? 'is-selected' : '',
+        element.is_visible === false ? 'is-hidden' : '',
+        preview.missing ? 'is-broken' : '',
+        // A derived sample is drawn differently so it cannot be mistaken
+        // for a number that came out of the warehouse.
+        preview.text && !preview.isReal ? 'is-sample' : '',
+      ].filter(Boolean).join(' ')}
+      style={{
+        left: `${element.x_mm}mm`, top: `${element.y_mm}mm`,
+        width: `${element.w_mm}mm`, height: `${element.h_mm}mm`,
+        zIndex: element.z_index,
+      }}
+      onPointerDown={(event) => onPointerDown(event, element)}
+      role="button"
+      tabIndex={0}
+      aria-pressed={isSelected}
+      aria-label={`${ELEMENT_LABELS[element.element_type] || element.element_type} element`}
+      data-element-id={element.id}
+    >
+      <span className="canvas-el-body" title={preview.note || undefined}>{body}</span>
+      {isSelected && HANDLES.map(handle => (
+        <span
+          key={handle}
+          className={`canvas-handle canvas-handle-${handle}`}
+          data-handle={handle}
+          onPointerDown={(event) => onHandlePointerDown(event, element, handle)}
+          aria-hidden="true"
+        />
+      ))}
+    </div>
+  );
+};
 
 export default CanvasElement;

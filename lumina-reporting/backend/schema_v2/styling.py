@@ -143,3 +143,36 @@ def element_classes(element):
             if value and value in OPTION_VOCABULARIES[key]:
                 classes.append(f'{prefix}-{value}')
     return classes
+
+
+# --- bindings ---------------------------------------------------------
+# Which column a binding kind must carry, and which it must leave empty.
+# The database enforces this with a check constraint; restating it here
+# turns a violation into a 400 that names the problem instead of an
+# IntegrityError that surfaces as a 500.
+BINDING_COLUMNS = {
+    'none': None,
+    'system': 'binding_key',
+    'dataset_field': 'dataset_field_id',
+    'display_spec': 'display_spec_id',
+}
+
+_BINDING_FIELDS = ('binding_key', 'dataset_field_id', 'display_spec_id')
+
+
+def binding_problems(element, where=''):
+    """A binding that names exactly what its kind requires, and nothing else."""
+    prefix = f'{where}: ' if where else ''
+    kind = element.get('binding_kind', 'none')
+    if kind not in BINDING_COLUMNS:
+        # Reported by the caller's own vocabulary check; nothing to add.
+        return []
+
+    required = BINDING_COLUMNS[kind]
+    problems = []
+    if required and element.get(required) in (None, ''):
+        problems.append(f'{prefix}a {kind} binding needs {required}')
+    for name in _BINDING_FIELDS:
+        if name != required and element.get(name) not in (None, ''):
+            problems.append(f'{prefix}a {kind} binding must not carry {name}')
+    return problems

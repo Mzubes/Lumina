@@ -1,9 +1,10 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { ORIENTATIONS, PAGE_SIZES, ZOOM_STEPS, contentBox } from '../../paper';
+import { EMPTY_CATALOGUE } from '../../bindings';
 import {
-  createTemplate, isDemoMode, listTemplates, loadTemplate, newVersion,
-  publishTemplate, saveTemplate, toApiTemplate,
+  createTemplate, isDemoMode, listTemplates, loadBindings, loadTemplate,
+  newVersion, publishTemplate, saveTemplate, toApiTemplate,
 } from '../../templateApi';
 import CanvasElement from './CanvasElement';
 import Inspector from './Inspector';
@@ -45,6 +46,7 @@ const TemplateCanvas = () => {
   const drag = useRef(null);
 
   const [catalogue, setCatalogue] = useState([]);
+  const [bindings, setBindings] = useState(EMPTY_CATALOGUE);
   const [saved, setSaved] = useState(null);
   const [busy, setBusy] = useState(!isDemoMode);
   const [error, setError] = useState('');
@@ -83,6 +85,18 @@ const TemplateCanvas = () => {
     })();
     return () => { cancelled = true; };
   }, [adopt]);
+
+  useEffect(() => {
+    if (isDemoMode) return undefined;
+    let cancelled = false;
+    // Deliberately not fatal. A canvas with no binding catalogue still
+    // lays out; it just cannot show sample values, and saying so beats
+    // refusing to open the editor.
+    loadBindings()
+      .then(result => { if (!cancelled) setBindings(result); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
 
   // `saved === null` means nothing has been stored yet -- an unsaved worked
   // example, which is dirty by definition.
@@ -313,6 +327,7 @@ const TemplateCanvas = () => {
                 <CanvasElement
                   key={element.id}
                   element={element}
+                  catalogue={bindings}
                   isSelected={selection.includes(element.id)}
                   onPointerDown={(event, target) => startGesture(event, target, 'move')}
                   onHandlePointerDown={(event, target, handle) =>
@@ -345,7 +360,7 @@ const TemplateCanvas = () => {
             ))}
           </ol>
 
-          <Inspector editor={editor} section={activeSection} />
+          <Inspector editor={editor} section={activeSection} catalogue={bindings} />
 
           <p className="panel-subtitle canvas-hint">
             Click an element; shift-click to add. Arrow keys nudge, shift-arrow

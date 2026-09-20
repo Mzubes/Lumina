@@ -7,6 +7,7 @@ from migrate_workflow_diagrams import migrate_workflow_diagrams
 from models import User, WorkflowGroup, WorkflowGroupMembership
 from roles import SYSTEM_ROLES
 from seed_demo import seed_demo
+from seed_v2_semantic import seed_v2_semantic
 from routes.activity import activity_blueprint
 from routes.ai_assistant import ai_blueprint
 from routes.auth import auth_blueprint
@@ -97,7 +98,13 @@ def create_app(test_config=None):
     def seed_demo_command():
         """Seed a reverse-engineered Pzena factsheet, distributed end-to-end,
         plus admin/editor/compliance/client demo logins. Safe to re-run."""
-        if seed_demo():
+        seeded = seed_demo()
+        # The v2 semantic layer is projected from whatever the demo loaded,
+        # so the canvas's field picker has real fields and real sample
+        # values to offer. Run unconditionally: an older database may have
+        # the demo data and no v2 datasets.
+        projected = seed_v2_semantic()
+        if seeded:
             click.echo(
                 'Seeded demo data. Logins (all @lumina.test): '
                 'admin/admin-pass, editor/editor-pass, compliance/compliance-pass, '
@@ -105,6 +112,8 @@ def create_app(test_config=None):
             )
         else:
             click.echo('Demo data already present -- nothing to do.')
+        if projected:
+            click.echo('Projected the demo data into the v2 semantic layer.')
 
     @app.cli.command('migrate-workflow-diagrams')
     @click.option('--dry-run', is_flag=True, default=False, help='Report what would change without committing.')

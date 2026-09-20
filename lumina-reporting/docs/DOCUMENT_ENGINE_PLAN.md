@@ -456,6 +456,41 @@ Two more faults the phase surfaced, both silent:
   blank box, and a capability nobody could reach. A test now asserts the
   list equals `renderers.charts.KINDS` exactly.
 
+**E4 as built.** `GET /api/bindings` serves the whole catalogue — system
+values, datasets with their fields, display specs — and the inspector
+binds an element to one of them. The canvas then draws **what that binding
+would actually show**, so an author lays out against the real string
+length rather than against the word "bound".
+
+Which kinds a type can take is constrained: a table or chart reads a whole
+result set, a field reads one value, a rule reads nothing. Switching kind
+goes through one `bindingPatch()` that sets the kind's own column and
+clears the others — the schema refuses an element carrying two, and the
+canvas should never be able to build one.
+
+**A sample says whether it is real.** Where the dataset cache holds rows
+the sample is a real value; where it does not, it is derived from the
+field's data type and is drawn differently and labelled "example". That
+distinction is the point of the phase: an author who sizes a column
+against a made-up number lays the page out twice, and one who is not told
+it is made up may never lay it out again. The fallback is per field, not
+per dataset — a null in row one means the column is sparse, not that the
+dataset is uncached.
+
+**The picker had nothing to pick.** Nothing outside the tests had ever
+created a v2 `Dataset`, so the field picker was correct and empty, which is
+indistinguishable from broken. `seed_v2_semantic.py` projects what
+`seed_demo` loads (`Holding`, `PerformanceSnapshot`) into the v2 shapes
+with the field metadata written out properly — a label rather than a column
+name, a data type, an aggregation, an alignment — which is what lets the
+picker say "Market value, currency, right-aligned, sample 16,500,000"
+instead of "MKT_VAL". It is a projection, not a migration: the v1 tables
+remain what the app serves from.
+
+Also closed: a binding that carried two columns hit the database's check
+constraint and surfaced as a 500. `binding_problems()` now reports it as a
+400 that names the offending column.
+
 **Verification:** rebuild the seeded Pzena factsheet from scratch on the
 canvas, with no code, and render it.
 

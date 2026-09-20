@@ -1559,6 +1559,21 @@ button.assistant-followup:hover { background: var(--brand-tint); color: var(--br
 .inspector-check input { flex: 0 0 auto; }
 .inspector-check > span { flex: 0 0 auto; }
 .canvas-hint { margin: 12px 0 0; font-size: 11px; }
+.inspector-heading {
+  margin: 10px 0 2px; font-size: 11px; font-weight: 700; letter-spacing: .06em;
+  text-transform: uppercase; color: var(--ink-muted);
+}
+/* The sample the selected binding would draw. A derived one is marked, so
+   an author never sizes a column against a number the warehouse has
+   never produced. */
+.inspector-sample {
+  margin: 2px 0 0; padding: 7px 9px; border-radius: var(--radius-sm);
+  background: var(--page-bg-2); font-size: 12px;
+  display: flex; flex-direction: column; gap: 2px;
+}
+.inspector-sample strong { font-variant-numeric: tabular-nums; }
+.inspector-sample i { font-style: normal; font-size: 11px; color: var(--ink-muted); }
+.inspector-sample.is-sample { border-left: 3px solid var(--c-draft, var(--ink-muted)); }
 
 /* ---------- the style vocabulary, on screen ----------
    Screen equivalents of the tokens in schema_v2/styling.py. Approximate by
@@ -1604,6 +1619,19 @@ button.assistant-followup:hover { background: var(--brand-tint); color: var(--br
 /* Hidden means hidden in the document; on the canvas it has to stay
    selectable, or an author could never turn it back on. */
 .canvas-el.is-hidden { opacity: .35; border-style: dashed; }
+
+/* A bound element whose sample is DERIVED rather than read from the
+   dataset cache. Drawn differently so it cannot be mistaken for a value
+   that came out of the warehouse -- laying a table out against a made-up
+   number is how a column ends up two characters too narrow. */
+.canvas-el.is-sample .canvas-el-body { font-style: italic; opacity: .75; }
+/* A binding naming something the catalogue no longer has: a deleted
+   field, a spec from another firm. Loud, because it renders as nothing. */
+.canvas-el.is-broken {
+  border-color: var(--c-critical, #e34948);
+  background: color-mix(in srgb, var(--c-critical, #e34948) 8%, #fff);
+}
+.canvas-el.is-broken .canvas-el-body { color: var(--c-critical, #e34948); }
 
 @media (max-width: 1100px) {
   .canvas-layout { flex-direction: column; }
