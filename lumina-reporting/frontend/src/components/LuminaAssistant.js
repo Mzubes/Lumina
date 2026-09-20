@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { apiFetch, isDemoMode } from '../api';
+import { LUMINA_ASK_EVENT } from '../luminaAskBus';
 import { IconSparkle } from '../icons';
 
 // Page label + (when on a report) the report id the assistant should ground
@@ -31,7 +32,25 @@ const LuminaAssistant = () => {
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
+  // Ids another page asked the assistant to ground its answer in. Cleared
+  // when the panel closes, so a question typed later isn't silently
+  // answered about a client the user has since navigated away from.
+  const [seededContext, setSeededContext] = useState(null);
   const scrollRef = useRef(null);
+
+  // A page can open the panel with a question pre-filled -- see luminaAskBus.
+  // It never sends: the draft is populated and focus handed over, and a
+  // human still presses Send.
+  useEffect(() => {
+    const handleAsk = (event) => {
+      const { question, context } = event.detail || {};
+      setOpen(true);
+      setSeededContext(context || null);
+      if (question) setDraft(question);
+    };
+    window.addEventListener(LUMINA_ASK_EVENT, handleAsk);
+    return () => window.removeEventListener(LUMINA_ASK_EVENT, handleAsk);
+  }, []);
 
   useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
@@ -55,7 +74,13 @@ const LuminaAssistant = () => {
       } else {
         const result = await apiFetch('/api/ai/ask', {
           method: 'POST',
-          body: JSON.stringify({ message: text, page: label, reportId }),
+          body: JSON.stringify({
+            message: text, page: label,
+            // A page-seeded id wins over the one inferred from the URL: the
+            // user explicitly asked about that record.
+            reportId: seededContext?.reportId ?? reportId,
+            clientId: seededContext?.clientId ?? null,
+          }),
         });
         setMessages((current) => [...current, { role: 'assistant', text: result.reply, configured: result.configured }]);
       }
@@ -75,7 +100,11 @@ const LuminaAssistant = () => {
               <div className="lumina-ai-panel-title"><IconSparkle /><span>Lumina AI</span></div>
               <div className="lumina-ai-panel-subtitle">Grounded in your firm's real data. Always human-reviewed before anything is sent.</div>
             </div>
-            <button type="button" className="lumina-ai-close" onClick={() => setOpen(false)} aria-label="Close Lumina AI">×</button>
+            <button
+              type="button" className="lumina-ai-close"
+              onClick={() => { setOpen(false); setSeededContext(null); }}
+              aria-label="Close Lumina AI"
+            >×</button>
           </div>
           <div className="lumina-ai-messages" ref={scrollRef}>
             {messages.length === 0 && (

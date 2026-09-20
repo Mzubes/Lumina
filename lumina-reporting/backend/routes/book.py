@@ -1,9 +1,10 @@
 import datetime
 
-from flask import Blueprint, jsonify
+from flask import Blueprint, g, jsonify, request
 
 from database import db_session
-from models import Client, Holding, PerformanceSnapshot, Report
+from models import Client, Holding, PerformanceSnapshot, Report, User
+import risk_status
 from routes.auth import require_auth
 import workflow_engine
 
@@ -49,15 +50,41 @@ def _client_last_report(client_id):
         .first()
     )
 
+def _manager_names(clients):
+    """relationship_manager_id -> display email, resolved in one query.
+
+    Kept at the route layer rather than in Client.serialize(), same
+    convention as routes/activity.py's actor_email -- every model's
+    serialize() in this codebase stays join-free.
+    """
+    manager_ids = {client.relationship_manager_id for client in clients if client.relationship_manager_id}
+    if not manager_ids:
+        return {}
+    return dict(db_session.query(User.id, User.email).filter(User.id.in_(manager_ids)).all())
+
+
 @book_blueprint.get('/api/book')
 @require_auth(roles=['admin', 'editor', 'viewer'])
 def get_book():
-    """Aggregate 'book of business' view across every client -- there's no
-    per-relationship-manager territory concept in the data model yet, so
-    this is the firm's whole book, not a filtered-to-caller one; scoping it
-    to an individual RM is a natural follow-up once that assignment exists.
+    """The firm's book of business, or just the caller's slice of it.
+
+    ?scope=mine filters to clients whose relationship_manager_id is the
+    caller. Deliberately two flat modes rather than a manager-of-managers
+    hierarchy: the data model records one RM per client and nothing about
+    who manages whom, so any deeper rollup would be invented.
+
+    Every row's summary figures come from the same helpers the drill-down
+    uses, and its risk badge from risk_status -- the same function the
+    Production Hub's firm-wide Delivery SLA rolls up, so a client that
+    reads "breached" here is counted as breached there.
     """
-    clients = db_session.query(Client).order_by(Client.name.asc()).all()
+    scope = request.args.get('scope')
+    query = db_session.query(Client)
+    if scope == 'mine':
+        query = query.filter(Client.relationship_manager_id == g.current_user['user_id'])
+    clients = query.order_by(Client.name.asc()).all()
+    manager_names = _manager_names(clients)
+    today = datetime.date.today()
     now = datetime.datetime.utcnow()
 
     total_aum = 0.0
@@ -90,8 +117,12 @@ def get_book():
         ):
             reports_mtd += 1
 
+        risk = risk_status.client_risk(client.id, today=today)
+
         rows.append({
             'client': client.serialize(),
+            'relationshipManager': manager_names.get(client.relationship_manager_id),
+            'risk': risk,
             'aum': aum,
             'asOfDate': as_of.isoformat() if as_of else None,
             'performance': {
@@ -114,6 +145,7 @@ def get_book():
     rows.sort(key=lambda row: row['aum'] or 0, reverse=True)
 
     return jsonify({
+        'scope': 'mine' if scope == 'mine' else 'firm',
         'totalAum': total_aum,
         'clientCount': len(clients),
         'underperformingCount': underperforming,
@@ -156,8 +188,15 @@ def get_book_client(client_id):
         .all()
     )
 
+    manager = (
+        db_session.query(User.email).filter_by(id=client.relationship_manager_id).scalar()
+        if client.relationship_manager_id else None
+    )
+
     return jsonify({
         'client': client.serialize(),
+        'relationshipManager': manager,
+        'risk': risk_status.client_risk(client_id),
         'aum': aum,
         'asOfDate': as_of.isoformat() if as_of else None,
         'holdings': [holding.serialize() for holding in holdings[:10]],

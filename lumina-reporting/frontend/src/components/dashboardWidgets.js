@@ -22,7 +22,10 @@ const STATUS_ROW_KEYS = new Set(STATUS_ROWS.map(row => row.key));
 
 const CATEGORICAL_COLORS = ['var(--cat-1)', 'var(--cat-2)', 'var(--cat-3)', 'var(--cat-4)', 'var(--cat-5)', 'var(--cat-6)'];
 
-const colorForLabel = (label) => {
+// Exported so anything that needs a stable per-label color (the Internal
+// Portal's client avatars, say) hashes the same way this registry does
+// instead of growing a second palette.
+export const colorForLabel = (label) => {
   let hash = 0;
   for (let i = 0; i < label.length; i += 1) hash = (hash * 31 + label.charCodeAt(i)) >>> 0;
   return CATEGORICAL_COLORS[hash % CATEGORICAL_COLORS.length];

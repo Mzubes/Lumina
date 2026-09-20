@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { HashRouter, NavLink, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import ActivityLog from './components/ActivityLog';
 import Dashboard from './components/Dashboard';
+import ClientProfile from './components/ClientProfile';
 import Clients from './components/clients';
 import DataHub from './components/datahub';
 import DataSources from './components/datasources';
@@ -228,6 +229,9 @@ function AuthenticatedShell() {
           <Route path="/workflow-groups" element={<RequireAuth><WorkflowGroups /></RequireAuth>} />
           <Route path="/client-portal" element={<RequireAuth><ClientPortal /></RequireAuth>} />
           <Route path="/internal-portal" element={<RequireAuth><InternalPortal /></RequireAuth>} />
+          {/* Distinct from /clients, which is the admin CRUD page -- this is
+              the relationship-manager view of one account. */}
+          <Route path="/internal-portal/clients/:id" element={<RequireAuth><ClientProfile /></RequireAuth>} />
           <Route path="/login" element={<Login />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
