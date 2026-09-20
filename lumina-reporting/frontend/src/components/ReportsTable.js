@@ -1,3 +1,4 @@
+import { colorForLabel } from '../categoricalPalette';
 import React from 'react';
 import { Link } from 'react-router-dom';
 
@@ -39,17 +40,6 @@ const STATUS_COLOR = {
   compliance: 'var(--c-compliance)',
   approved: 'var(--c-approved)',
   distributed: 'var(--c-distributed)',
-};
-
-const CATEGORICAL_COLORS = ['var(--cat-1)', 'var(--cat-2)', 'var(--cat-3)', 'var(--cat-4)', 'var(--cat-5)', 'var(--cat-6)'];
-
-// Deterministic hash-to-categorical-color -- same idiom as
-// dashboardWidgets.js's colorForLabel, for a status/step name this table was
-// never written to anticipate (a firm-customized workflow step).
-const colorForLabel = (label) => {
-  let hash = 0;
-  for (let i = 0; i < label.length; i += 1) hash = (hash * 31 + label.charCodeAt(i)) >>> 0;
-  return CATEGORICAL_COLORS[hash % CATEGORICAL_COLORS.length];
 };
 
 // A diagram-backed report's status is already the human-readable label (its

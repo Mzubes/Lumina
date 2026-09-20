@@ -52,20 +52,36 @@
   --c-compliance: #6d28d9;
   --c-critical: #9f1239;
 
-  /* categorical identity (Team/Client/Asset-class groupings) -- distinct role
-     from the status colors above. This exact 6-hue order is validated
-     (dataviz skill's validate_palette.js against this app's white card
-     surface): all six checks pass with zero CVD warnings, worst adjacent
-     protanopia/deuteranopia ΔE 9.2 (>=8 target). The previous set (a
-     dulled-down slice of the status colors, reused for "category" duty)
-     failed the CVD check outright -- cat-4 amber and cat-3 green were only
-     ΔE 5.0 apart under protanopia, indistinguishable to a colorblind reader. */
+  /* Categorical identity (Team/Client/Asset-class groupings) -- a distinct
+     role from the status colors above.
+
+     These eight, in THIS order, are the dataviz skill's validated set,
+     re-checked against the white card these charts actually sit on:
+     worst adjacent protan dE 9.1 (>=8 target), worst adjacent
+     normal-vision dE 19.6 (>=15 floor), every check passing.
+
+     The previous six were this set minus yellow and green, in a different
+     order, and that order FAILED: cat-5 magenta and cat-6 red sat adjacent
+     at normal-vision dE 13.2, below the floor -- two series a full-colour
+     reader struggles to separate. All 120 re-orderings of those six were
+     enumerated against the validator and none clears every gate, so the
+     repair was the two missing hues rather than a re-shuffle. Slots 1-3
+     are unchanged; 4 and 6 changed hue, and 7-8 are new.
+
+     Three of the eight (aqua, yellow, magenta) sit below 3:1 against
+     white. The charts carry legends and direct value labels, which is the
+     relief the skill requires -- do not remove them.
+
+     backend/renderers/chart_palette.py holds the same eight in the same
+     order, because print sits on the same white. */
   --cat-1: #2a78d6; /* blue */
   --cat-2: #eb6834; /* orange */
   --cat-3: #1baf7a; /* aqua */
-  --cat-4: #4a3aa7; /* violet */
+  --cat-4: #eda100; /* yellow */
   --cat-5: #e87ba4; /* magenta */
-  --cat-6: #e34948; /* red */
+  --cat-6: #008300; /* green */
+  --cat-7: #4a3aa7; /* violet */
+  --cat-8: #e34948; /* red */
   --cat-other: var(--ink-muted);
 
   /* elevation -- cool-tinted to match the surfaces above; the previous warm
@@ -1141,6 +1157,8 @@ select { appearance: none; background-image: linear-gradient(45deg, transparent 
 .workflow-group-swatch.swatch-cat-4 { background: var(--cat-4); }
 .workflow-group-swatch.swatch-cat-5 { background: var(--cat-5); }
 .workflow-group-swatch.swatch-cat-6 { background: var(--cat-6); }
+.workflow-group-swatch.swatch-cat-7 { background: var(--cat-7); }
+.workflow-group-swatch.swatch-cat-8 { background: var(--cat-8); }
 .workflow-group-swatch.swatch-cat-other { background: var(--cat-other); }
 
 /* ---------- workflow diagram editor ---------- */

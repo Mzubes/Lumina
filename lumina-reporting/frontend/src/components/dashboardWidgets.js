@@ -1,3 +1,4 @@
+import { assignSeriesColors, colorForLabel } from '../categoricalPalette';
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import AreaChart from './charts/AreaChart';
@@ -20,22 +21,15 @@ export const STATUS_ROWS = [
 ];
 const STATUS_ROW_KEYS = new Set(STATUS_ROWS.map(row => row.key));
 
-const CATEGORICAL_COLORS = ['var(--cat-1)', 'var(--cat-2)', 'var(--cat-3)', 'var(--cat-4)', 'var(--cat-5)', 'var(--cat-6)'];
+// Re-exported so existing importers (Avatar, the Internal Portal) keep
+// working while the palette itself lives in one place.
+export { colorForLabel };
 
-// Exported so anything that needs a stable per-label color (the Internal
-// Portal's client avatars, say) hashes the same way this registry does
-// instead of growing a second palette.
-export const colorForLabel = (label) => {
-  let hash = 0;
-  for (let i = 0; i < label.length; i += 1) hash = (hash * 31 + label.charCodeAt(i)) >>> 0;
-  return CATEGORICAL_COLORS[hash % CATEGORICAL_COLORS.length];
-};
-
-const toCategoricalData = (rows) => (rows || []).map((row, index) => ({
-  label: row.label,
-  value: row.count,
-  color: (row.label === 'Other' || row.label === 'Unassigned') ? 'var(--cat-other)' : CATEGORICAL_COLORS[index % CATEGORICAL_COLORS.length],
-}));
+// Was CATEGORICAL_COLORS[index % length], which handed the 9th series the
+// 1st one's hue and made two different teams look like one team.
+const toCategoricalData = (rows) => assignSeriesColors(
+  (rows || []).map(row => ({ label: row.label, value: row.count })),
+);
 
 const toWeeklyData = (rows) => (rows || []).map(row => ({ label: row.label, value: row.count, color: 'var(--brand)' }));
 
@@ -299,9 +293,12 @@ const SlowestStepsWidget = ({ management }) => {
       <p className="panel-subtitle">Average <strong>hours</strong> per completed visit. Wall-clock, so it includes nights and weekends.</p>
       <BarChart
         title="Slowest steps" unitLabel="hours"
-        data={steps.map((step, index) => ({
+        data={steps.map(step => ({
           label: step.label, value: step.avgHours, valueLabel: `${step.avgHours}h`,
-          color: CATEGORICAL_COLORS[index % CATEGORICAL_COLORS.length],
+          // One measure, one colour. A categorical hue per bar encodes
+          // nothing the label does not already say -- and it was cycling
+          // past the palette's length besides.
+          color: 'var(--brand)',
         }))}
       />
     </>

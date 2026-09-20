@@ -6,6 +6,8 @@ implementation it was ported from, and pin the product decisions that fell
 out of running it.
 """
 
+from pathlib import Path
+
 import pytest
 
 from renderers import chart_palette
@@ -14,9 +16,14 @@ from renderers.chart_palette import (ALL_PAIRS_MAX_SERIES, DEFAULT_SERIES, MAX_S
                                      series_colors, validate)
 from renderers.color_science import InvalidColor, contrast, delta_e, normalise, oklch
 
-# The app's on-screen categorical order (styles.css --cat-1..6). Here only as
-# the thing print deliberately does NOT inherit.
-SCREEN_SERIES = ('#2a78d6', '#eb6834', '#1baf7a', '#4a3aa7', '#e87ba4', '#e34948')
+# What styles.css --cat-1..8 now holds. Print and screen share one palette
+# because they share one ground: a chart on a white card and a chart on
+# paper sit on the same white.
+SCREEN_SERIES = DEFAULT_SERIES
+
+# The order styles.css carried until this was measured. Kept as a
+# regression fixture, not as a live palette.
+RETIRED_SCREEN_SERIES = ('#2a78d6', '#eb6834', '#1baf7a', '#4a3aa7', '#e87ba4', '#e34948')
 
 # Numbers printed by the dataviz skill's validate_palette.js, the reference
 # implementation color_science.py was ported from. Re-derive with:
@@ -82,19 +89,37 @@ def test_the_print_palette_is_short_on_contrast_and_that_is_known():
     assert faint == ['#1baf7a', '#eda100', '#e87ba4']
 
 
-def test_print_does_not_inherit_the_screen_palette():
-    """Pinned so nobody 'simplifies' print by reusing --cat-1..6.
+def test_the_retired_screen_order_really_was_broken():
+    """The measurement that forced the change, kept so the old order cannot
+    drift back in.
 
-    The screen order fails the normal-vision floor on paper: magenta and red
-    are adjacent at delta-E 13.2, under the floor of 15. All 120 re-orderings
-    of those six hues were enumerated against the reference validator and
-    none clears every gate -- the subset is short the two hues (yellow,
-    green) that make the full reference set work, so this is not fixable by
-    re-ordering.
+    It fails the normal-vision floor: magenta and red adjacent at delta-E
+    13.2, under the floor of 15 -- two series a full-colour reader
+    struggles to separate. All 120 re-orderings of those six hues were
+    enumerated against the reference validator and none clears every gate,
+    so the repair was the two missing hues (yellow, green), not a
+    re-shuffle.
     """
-    broken = failures(SCREEN_SERIES)
-    assert [name for name, _ in broken] == ['Normal-vision floor']
-    assert set(SCREEN_SERIES) < set(DEFAULT_SERIES)
+    assert [name for name, _ in failures(RETIRED_SCREEN_SERIES)] == ['Normal-vision floor']
+    assert set(RETIRED_SCREEN_SERIES) < set(DEFAULT_SERIES)
+
+
+def test_screen_and_print_agree():
+    """One palette, because one ground. styles.css is the other half of
+    this and cannot be checked from here -- test_styles_css_matches_the_
+    palette below reads it."""
+    assert SCREEN_SERIES == DEFAULT_SERIES
+
+
+def test_styles_css_matches_the_palette():
+    """Two languages, one list. Without this the frontend tokens and this
+    module drift apart silently and only a designer's eye would catch it."""
+    import re
+
+    styles = (Path(__file__).resolve().parents[2] / 'frontend' / 'src' / 'styles.css').read_text()
+    tokens = re.findall(r'--cat-(\d+):\s*(#[0-9a-fA-F]{6})', styles)
+    assert [color for _, color in sorted(tokens, key=lambda pair: int(pair[0]))] == \
+        list(DEFAULT_SERIES)
 
 
 def test_every_slot_is_inside_the_lightness_band():

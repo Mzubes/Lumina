@@ -1,3 +1,4 @@
+import { CATEGORICAL_COLORS, MAX_SERIES } from '../categoricalPalette';
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { apiBaseUrl, apiFetch, isDemoMode } from '../api';
@@ -27,11 +28,9 @@ const formatCurrency = (value) => (
 );
 const formatPercent = (value) => (value == null ? '—' : `${value > 0 ? '+' : ''}${Number(value).toFixed(1)}%`);
 
-const CATEGORICAL_COLORS = ['var(--cat-1)', 'var(--cat-2)', 'var(--cat-3)', 'var(--cat-4)', 'var(--cat-5)', 'var(--cat-6)'];
-
 // Composition rides on the stacked/segmented bar, not a donut (dataviz skill:
 // part-to-whole -> stacked bar; donut stays deprioritized). Folds past the
-// 6-slot categorical ceiling into "Other", matching the same pattern the
+// categorical ceiling into "Other", matching the same pattern the
 // dashboard aggregates already use server-side.
 const assetAllocation = (holdings) => {
   const totals = {};
@@ -40,10 +39,10 @@ const assetAllocation = (holdings) => {
     totals[label] = (totals[label] || 0) + (Number(holding.market_value) || 0);
   });
   const sorted = Object.entries(totals).sort((a, b) => b[1] - a[1]);
-  const top = sorted.slice(0, 6).map(([label, value], index) => ({
-    label, value, color: label === 'Unassigned' ? 'var(--cat-other)' : CATEGORICAL_COLORS[index % CATEGORICAL_COLORS.length],
+  const top = sorted.slice(0, MAX_SERIES).map(([label, value], index) => ({
+    label, value, color: label === 'Unassigned' ? 'var(--cat-other)' : CATEGORICAL_COLORS[index],
   }));
-  const overflow = sorted.slice(6).reduce((sum, [, value]) => sum + value, 0);
+  const overflow = sorted.slice(MAX_SERIES).reduce((sum, [, value]) => sum + value, 0);
   if (overflow) top.push({ label: 'Other', value: overflow, color: 'var(--cat-other)' });
   return top;
 };

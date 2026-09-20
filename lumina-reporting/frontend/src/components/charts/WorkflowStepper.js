@@ -1,3 +1,4 @@
+import { CATEGORICAL_COLORS } from '../../categoricalPalette';
 import React from 'react';
 
 const LEGACY_STEPS = [
@@ -77,8 +78,6 @@ const buildColumns = (nodes) => {
     .filter(node => (node.position?.x ?? 0) === x)
     .sort((a, b) => (a.position?.y ?? 0) - (b.position?.y ?? 0)));
 };
-
-const CATEGORICAL_COLORS = ['var(--cat-1)', 'var(--cat-2)', 'var(--cat-3)', 'var(--cat-4)', 'var(--cat-5)', 'var(--cat-6)'];
 
 // Deterministic hash-to-categorical-color, keyed by node id (stable across
 // renders) -- same idiom used for firm-custom names elsewhere (ReportsTable,
