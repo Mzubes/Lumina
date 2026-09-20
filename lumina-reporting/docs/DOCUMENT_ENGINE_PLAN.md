@@ -18,6 +18,9 @@ load-bearing technical claims in this repo's own environment (see
 | Reconciliation happens **upstream**; Lumina gates publishing on the attestation | confirmed |
 | The deliverable is a **marketing-quality document** | confirmed |
 | Template authoring must be a **visual canvas**, not a form | confirmed |
+| Layout supports **both** absolute placement and flowing bands | confirmed |
+| **PPTX stays in scope** as a second renderer | confirmed |
+| Template authors are ops, working from approved blocks; **marketing sets guidelines and retrieves content** | confirmed |
 | Data model v2 (24 tables: entities + `Dataset`/`DisplaySpec` + `DataLoad` + `ReportSnapshot` + `BrandKit`) | designed, tested, not wired in |
 
 ---
@@ -122,17 +125,31 @@ colours match the brand kit; no raster artefacts.
 
 ---
 
-### D · Template model v2 — sections and elements · ~1 week
+### D · Template model v2 — sections and elements · ~1.5 weeks
 
 **Goal:** the Coric-shaped model, expressed in the schema.
 
 ```
 ReportTemplate
-  └─ TemplateSection    band: bound to Dataset + DisplaySpec, iterates,
-  │                     page-break rules, orientation, repeat-on-every-page
+  └─ TemplateSection    layout_mode: 'flow' | 'fixed'
+  │                     flow  -> stacks, may iterate a Dataset, breaks across pages
+  │                     fixed -> anchored at page coordinates, does not flow
+  │                     + page-break rules, orientation, repeat-on-every-page
   └─ TemplateElement    x, y, w, h, z, type, binding, style
+                        absolutely positioned WITHIN its section
                         text | field | table | chart | image | line | box | page_number
 ```
+
+**Both layout modes, per the decision above.** A "free placement per page"
+design is a `fixed` section covering the page; a flowing factsheet body is a
+`flow` section. One model, both behaviours, and a template mixes them —
+a fixed masthead and footer with a flowing body between them.
+
+**The element model stays renderer-agnostic.** Because PPTX is in scope
+(Phase G), no element may encode HTML-specific semantics. Position, size,
+type, binding and style are abstract; each renderer maps them. A `style`
+value names a brand-kit token, never a CSS declaration. This is now a hard
+constraint rather than good practice — two renderers consume this tree.
 
 - Both scoped by `firm_id`, both additive to schema_v2
 - `TemplateElement.binding` references a `DatasetField` or a `DisplaySpec`
@@ -149,6 +166,22 @@ byte-comparable output to Phase A.
 ### E · The canvas · ~3–4 weeks
 
 **Goal:** the visual designer. Largest phase; sub-phases ship in order.
+
+**Reframed by the authoring decision.** This is not a freeform design tool.
+Templates are built by client-reporting ops from **approved building blocks**,
+inside guardrails marketing sets:
+
+- Colour and type are chosen from `BrandKit` **tokens**, never a free colour
+  picker or font dropdown. Off-brand output should be unreachable, not
+  discouraged.
+- New sections start from the preset library (`templateLibrary.js` already
+  holds the right catalogue — Fund Facts, Sector Weights, Region
+  Concentration and the rest). A blank page is available but is not the
+  default path.
+- Free placement is real, but snapped to the brand grid and margin guides.
+- Marketing's role here is **governance, not authoring**: they own the brand
+  kit, the approved block catalogue and the disclosure rules. They are not
+  expected to open the canvas.
 
 | | Sub-phase | Delivers |
 |---|---|---|
@@ -190,7 +223,7 @@ nothing says so.
 
 ---
 
-### G · PPTX as a second renderer · ~1–1.5 weeks · optional
+### G · PPTX as a second renderer · ~1–1.5 weeks
 
 **Goal:** deck-shaped output, where clients want the editable file.
 
@@ -211,8 +244,35 @@ via `replace_data()` keeping series colours and legend.
 Scope this to `pitchbook` / `meeting_pack` / `marketing` report types only.
 Factsheets and statements stay on the HTML path, which has flow layout.
 
+Confirmed in scope, so Phase D's element model must stay renderer-agnostic
+from the start — retrofitting that later means rewriting every template.
+
 Requires `libreoffice-impress` in the container — **not** installed by
 default; `libreoffice-core` alone has no PPTX filter.
+
+---
+
+### H · Content retrieval for marketing · ~1–1.5 weeks · NEW
+
+**Goal:** serve the persona the rest of this plan does not.
+
+Marketing sets the guidelines and then **comes to the system to retrieve
+content** — the latest approved factsheet for a fund, a sector chart to drop
+into a pitch deck, an approved commentary paragraph to reuse. None of that is
+template authoring, and none of it exists today.
+
+- A content library over distributed reports and their frozen
+  `ReportSnapshot`s: browse by fund / strategy / client / period, filtered to
+  **approved and current only**
+- Download a document in any registered format, or export a single component
+  — a chart as SVG/PNG, a table as XLSX — without opening the report
+- Reusable text blocks (commentary, disclosures) with their approval state
+  visible, so nobody pastes a superseded paragraph into a new deck
+- A "what changed" view: which packs moved since a given date
+
+This is much of what Seismic actually sells, and it is closer to revenue than
+the canvas is. It depends only on Phase F (snapshot freezing), not on the
+canvas — so it can run in parallel with D and E.
 
 ---
 
@@ -245,22 +305,25 @@ Everything below was run in this repo's environment, not assumed.
 
 ## Open decisions
 
-1. **Absolute positioning inside bands, or full free placement per page?**
-   Coric does both — absolute inside a band, bands flow. That is my
-   recommendation, but it changes the element model, so it should be settled
-   before Phase D.
-2. **Is PPTX (Phase G) in or out?** It is genuinely optional. It buys the
-   editable-deck use case and costs a second renderer to maintain.
-3. **Who authors templates?** If marketing designers do, the canvas needs to
-   feel like a design tool. If client-reporting ops do, it can lean more on
-   presets and structure. This changes E2/E3 materially.
+All three opening questions are now answered and folded into the phases
+above. What remains open:
+
+1. **Does marketing need to edit the approved block catalogue themselves, or
+   does ops curate it on their behalf?** Changes whether Phase H ships a
+   governance UI or just a read surface.
+2. **Which brand fonts, and are they licensed for server-side embedding?**
+   Blocks Phase C. `BrandKit.font_asset_uris` exists to hold them, but the
+   licence question is commercial, not technical.
+3. **What is the real page-count ceiling for a pack?** Drives whether
+   rendering is synchronous or goes to a job queue. A 4-page factsheet is
+   sub-second; a 200-page consolidated statement is not.
 
 ---
 
 ## Suggested order of attack
 
-**A → B → F in parallel → C → D → E**, with G deferred until after E1–E3 prove
-the canvas direction.
+**A → B → F in parallel → C → D → E**, with H alongside D/E once F lands, and
+G after E1–E3 prove the canvas direction.
 
 Phase A alone makes every existing document markedly better and takes about a
 week. It is the highest ratio of visible improvement to risk in the whole

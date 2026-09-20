@@ -1,0 +1,165 @@
+{#
+  The document. One Jinja template, one stylesheet, no JavaScript.
+
+  Every colour below is a literal hex resolved in Python -- see
+  html_pdf_renderer._theme(). Nothing here may use color-mix(): WeasyPrint
+  drops it silently, and a test asserts its absence.
+#}
+<style>
+  @page {
+    size: A4;
+    margin: 26mm 16mm 20mm 16mm;
+
+    /* Running header and footer. fpdf2 had to simulate these by drawing on
+       every page; here the engine owns them, so they cannot drift. */
+    @top-left {
+      content: "{{ header.title | default(content.report_title, true) }}";
+      font-size: 7.5pt; color: {{ theme.muted }};
+      border-bottom: .4pt solid {{ theme.rule }};
+      width: 100%; vertical-align: bottom; padding-bottom: 3mm;
+    }
+    @bottom-left {
+      content: "{{ footer.text | default('', true) }}";
+      font-size: 7pt; color: {{ theme.muted }};
+    }
+    @bottom-right {
+      /* The page counter fpdf2 could not produce at all: total pages are
+         unknown until layout finishes, so only the engine can fill it. */
+      content: "Page " counter(page) " of " counter(pages);
+      font-size: 7pt; color: {{ theme.muted }};
+    }
+  }
+
+  html { font-size: 10pt; }
+  body {
+    font-family: "DejaVu Sans", "Helvetica Neue", Helvetica, Arial, sans-serif;
+    color: {{ theme.ink }}; line-height: 1.42; margin: 0;
+  }
+
+  .doc-title { font-size: 17pt; font-weight: 700; color: {{ theme.primary }}; margin: 0 0 1mm; }
+  .doc-subtitle { font-size: 9pt; color: {{ theme.muted }}; margin: 0 0 1.5mm; }
+  .doc-meta { font-size: 7.5pt; color: {{ theme.muted }}; margin: 0 0 7mm; }
+  .doc-rule { height: 2pt; background: {{ theme.accent }}; margin: 0 0 7mm; }
+
+  .component { margin-bottom: 8mm; }
+  /* Keep a section's heading with at least the start of its content -- a
+     title stranded alone at the foot of a page is the classic giveaway
+     that a document was generated rather than typeset. */
+  .component h2 {
+    font-size: 10.5pt; font-weight: 700; color: {{ theme.primary }};
+    margin: 0 0 2.5mm; padding-bottom: 1.2mm;
+    border-bottom: .5pt solid {{ theme.rule }};
+    break-after: avoid;
+  }
+
+  table { width: 100%; border-collapse: collapse; font-size: 8.5pt; }
+  /* Repeats the header row on every page a long table spans. */
+  thead { display: table-header-group; }
+  tr { break-inside: avoid; }
+  th {
+    background: {{ theme.primary }}; color: #ffffff; text-align: left;
+    padding: 2.2mm 2mm; font-size: 7.5pt; font-weight: 700;
+    letter-spacing: .03em; text-transform: uppercase;
+  }
+  td { padding: 1.9mm 2mm; border-bottom: .4pt solid {{ theme.rule }}; }
+  tbody tr:nth-child(even) td { background: {{ theme.zebra }}; }
+  .num { text-align: right; font-variant-numeric: tabular-nums; }
+
+  .text-block { font-size: 9pt; white-space: pre-wrap; }
+
+  .people { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4mm; }
+  .person { break-inside: avoid; font-size: 8.5pt; }
+  .person-name { font-weight: 700; color: {{ theme.primary }}; }
+  .person-meta { color: {{ theme.muted }}; font-size: 7.5pt; }
+
+  /* CSS bar chart -- the same technique the app's own BarChart uses, which
+     is pure HTML/CSS with zero SVG. Vector, crisp at any DPI, themed. */
+  .chart { margin-top: 3mm; break-inside: avoid; }
+  .chart-row { display: grid; grid-template-columns: 34mm 1fr; gap: 2.5mm;
+               align-items: center; margin-bottom: 1.6mm; }
+  .chart-label { font-size: 7.5pt; color: {{ theme.ink }}; }
+  .chart-bars { display: flex; flex-direction: column; gap: .8mm; }
+  .chart-bar { height: 2.4mm; border-radius: 1.2mm; }
+  .chart-bar-a { background: {{ theme.primary }}; }
+  .chart-bar-b { background: {{ theme.accent_bar_light }}; }
+  .chart-legend { display: flex; gap: 5mm; font-size: 7pt;
+                  color: {{ theme.muted }}; margin-top: 2mm; }
+  .chart-swatch { display: inline-block; width: 2.4mm; height: 2.4mm;
+                  border-radius: .6mm; margin-right: 1.2mm; }
+
+  .empty { font-size: 8.5pt; color: {{ theme.muted }}; font-style: italic; }
+</style>
+
+<h1 class="doc-title">{{ header.title | default(content.report_title, true) }}</h1>
+{% if header.subtitle %}<p class="doc-subtitle">{{ header.subtitle }}</p>{% endif %}
+<p class="doc-meta">
+  {%- if content.client_name %}{{ content.client_name }} · {% endif -%}
+  Generated {{ content.generated_at[:10] }}
+</p>
+<div class="doc-rule"></div>
+
+{% for component in components %}
+  <section class="component">
+    {% if component.title %}<h2>{{ component.title }}</h2>{% endif %}
+
+    {% if component.type == 'text_block' %}
+      <div class="text-block">{{ component.text }}</div>
+
+    {% elif component.type == 'people_grid' %}
+      <div class="people">
+        {% for person in component.people or [] %}
+          <div class="person">
+            <div class="person-name">{{ person.name }}</div>
+            {% if person.title %}<div class="person-meta">{{ person.title }}</div>{% endif %}
+            {% if person.detail %}<div class="person-meta">{{ person.detail }}</div>{% endif %}
+          </div>
+        {% endfor %}
+      </div>
+
+    {% elif component.columns %}
+      {% if component.rows %}
+        <table>
+          <thead>
+            <tr>
+              {% for column in component.columns %}
+                <th class="{{ 'num' if component.numeric_columns[loop.index0] else '' }}">{{ column }}</th>
+              {% endfor %}
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in component.formatted_rows %}
+              <tr>
+                {% for cell in row %}
+                  <td class="{{ 'num' if component.numeric_columns[loop.index0] else '' }}">{{ cell }}</td>
+                {% endfor %}
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      {% else %}
+        <p class="empty">No data on file for this section.</p>
+      {% endif %}
+
+      {% if component.bar_series %}
+        <div class="chart">
+          {% for item in component.bar_series %}
+            <div class="chart-row">
+              <span class="chart-label">{{ item.label }}</span>
+              <div class="chart-bars">
+                <div class="chart-bar chart-bar-a" style="width: {{ '%.1f' | format(item.a_pct) }}%"></div>
+                <div class="chart-bar chart-bar-b" style="width: {{ '%.1f' | format(item.b_pct) }}%"></div>
+              </div>
+            </div>
+          {% endfor %}
+          <div class="chart-legend">
+            <span><span class="chart-swatch chart-bar-a"></span>{{ component.columns[1] }}</span>
+            <span><span class="chart-swatch chart-bar-b"></span>{{ component.columns[2] }}</span>
+          </div>
+        </div>
+      {% endif %}
+
+    {% else %}
+      <p class="empty">Nothing to display.</p>
+    {% endif %}
+  </section>
+{% endfor %}
