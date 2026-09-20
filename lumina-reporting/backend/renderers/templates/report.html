@@ -9,6 +9,12 @@
 <style>
   @page {
     size: A4;
+    /* Margin boxes do NOT inherit from body -- they take the page
+       context's initial value, which is serif. The running header and
+       footer were therefore set in DejaVu Serif while the document was
+       DejaVu Sans, on every page of every document. Caught by counting
+       the faces embedded in the PDF. */
+    font-family: "DejaVu Sans", "Helvetica Neue", Helvetica, Arial, sans-serif;
     /* A pinned band is out of flow, so its height is reserved in the page
        MARGIN rather than as body padding: padding applies once to the
        whole block, so it only cleared the band on page one and the header
@@ -154,7 +160,14 @@
   .chart-swatch { display: inline-block; width: 2.4mm; height: 2.4mm;
                   border-radius: .6mm; margin-right: 1.2mm; }
 
-  .empty { font-size: 8.5pt; color: {{ theme.muted }}; font-style: italic; }
+  /* Muted, not italic. DejaVu Sans ships no oblique face, so asking for
+     one made the engine synthesize or substitute whichever italic the
+     HOST happened to have -- the same document rendered differently on
+     two machines, which CI caught as a content-stream mismatch on the one
+     fixture that used it. A client's PDF must not depend on the render
+     host's font set; see the allow-list test in
+     test_html_pdf_renderer.py. */
+  .empty { font-size: 8.5pt; color: {{ theme.muted }}; }
 
   /* ---- fixed bands (Phase D) -------------------------------------------
      A declared height with its contents anchored inside it. A flow band is

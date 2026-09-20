@@ -146,6 +146,11 @@ def fingerprint_difference(first, second, tolerance=24):
 # only a different WeasyPrint, Pango or font set can. That is exactly the
 # distinction the golden tests need: "the document changed" must not be
 # confused with "this machine lays out text differently".
+#
+# It exercises every face a document may use (regular and bold), because an
+# earlier version used only the regular one and therefore did NOT notice
+# that a second machine resolved a different face for the one style the
+# canary omitted.
 ENVIRONMENT_CANARY = '''
 <style>
   @page { size: 80mm 40mm; margin: 4mm }
@@ -156,6 +161,7 @@ ENVIRONMENT_CANARY = '''
   td { padding: 1.9mm 2mm; border-bottom: .4pt solid #dcdcdc }
 </style>
 <div>Hamburgefonstiv &mdash; 1,234.50 (0.4%)</div>
+<div style="font-weight:700">Hamburgefonstiv Bold 1,234.50</div>
 <div class="rule"></div>
 <table><tr><td>Tate &amp; Lyle</td><td>3.4%</td></tr></table>
 '''

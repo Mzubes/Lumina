@@ -258,3 +258,59 @@ def test_a_long_document_does_not_open_with_a_blank_page():
                        columns=['Security', 'Units'], title='Positions')
     first = content_to_images(_content(components=[component]))[0]
     assert ink_ratio(first) > 0.10, 'the document opens on a near-blank page'
+
+
+# ---------------------------------------------------------------------------
+# Which faces a document may embed
+# ---------------------------------------------------------------------------
+
+# Every face here is a real file in fonts-dejavu-core, the package CI and
+# the deployment install. Anything else means the engine substituted or
+# SYNTHESIZED a face, which makes the document depend on the render host's
+# font set -- two machines, two different PDFs from one payload.
+ALLOWED_FACES = {'DejaVu-Sans', 'DejaVu-Sans-Bold'}
+
+
+def _embedded_faces(pdf_bytes):
+    import io
+
+    from pypdf import PdfReader
+    return {str(font.get_object().get('/BaseFont')).split('+')[-1]
+            for page in PdfReader(io.BytesIO(pdf_bytes)).pages
+            for font in (page.get('/Resources', {}).get('/Font') or {}).values()}
+
+
+def test_a_document_embeds_only_faces_that_really_exist():
+    """CI found this the expensive way: `.empty` asked for italic, DejaVu
+    Sans ships no oblique face, and the engine synthesized one. The single
+    fixture using italic then rendered differently on two machines while
+    the other three matched -- a red build whose cause was invisible in the
+    diff.
+
+    Counting the embedded faces turns that whole class of bug into a
+    named failure.
+    """
+    component = _table([['Financials', '12%', '15%']], chart_type='bar_comparison')
+    faces = _embedded_faces(render_html_pdf(_content(components=[component])))
+    assert faces <= ALLOWED_FACES, f'unexpected face(s): {sorted(faces - ALLOWED_FACES)}'
+
+
+def test_an_empty_section_note_is_not_italic():
+    """The specific rule behind the allow-list, pinned so it cannot drift
+    back: no italic anywhere in the print stylesheet, because the family
+    has no italic to give."""
+    document = render_document_html(_content(components=[_table([])]))
+    assert 'No data on file' in _body(document)
+    assert 'font-style: italic' not in document
+
+
+def test_the_running_header_is_set_in_the_document_face():
+    """@page margin boxes do NOT inherit from body -- they take the page
+    context's initial family, which is serif. The running header and
+    footer were set in DejaVu Serif on every page of every document until
+    the face count showed a third font nobody had asked for."""
+    document = render_document_html(_content(components=[_table([['A', '1', '2']])]))
+    page_block = document[document.index('@page'):document.index('html {')]
+    assert 'font-family: "DejaVu Sans"' in page_block
+    assert 'DejaVu-Serif' not in _embedded_faces(
+        render_html_pdf(_content(components=[_table([['A', '1', '2']])])))
