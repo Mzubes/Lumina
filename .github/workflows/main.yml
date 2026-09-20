@@ -38,5 +38,16 @@ jobs:
           python-version: '3.12'
           cache: pip
           cache-dependency-path: lumina-reporting/backend/requirements-dev.txt
+      # The print tests rasterise real PDFs (pdftoppm) and compare them
+      # against golden references rendered in DejaVu Sans. Without these the
+      # whole print suite skips silently.
+      #
+      # -core is enough, and deliberately so: the print stylesheet uses only
+      # the regular and bold faces, both of which this package ships. It
+      # previously asked for an italic DejaVu Sans has never had, so the
+      # engine synthesized one and the document rendered differently here
+      # than on a developer machine. test_a_document_embeds_only_faces_that
+      # _really_exist now fails if a face outside that set appears.
+      - run: sudo apt-get update && sudo apt-get install -y poppler-utils fonts-dejavu-core
       - run: pip install -r requirements-dev.txt
       - run: pytest

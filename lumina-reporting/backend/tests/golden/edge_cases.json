@@ -1,0 +1,57 @@
+{
+  "report_title": "Renderer Edge Cases",
+  "generated_at": "2026-06-30T09:00:00",
+  "header_config": {},
+  "footer_config": {},
+  "theme_config": {
+    "primary_color": "not-a-colour",
+    "accent_color": ""
+  },
+  "components": [
+    {
+      "type": "data_table",
+      "title": "No Data On File",
+      "columns": [
+        "A",
+        "B"
+      ],
+      "rows": []
+    },
+    {
+      "type": "data_table",
+      "title": "Attribution",
+      "chart_type": "bar_comparison",
+      "columns": [
+        "Effect",
+        "Portfolio",
+        "Benchmark"
+      ],
+      "rows": [
+        [
+          "Allocation",
+          "(0.4)",
+          "0.2"
+        ],
+        [
+          "Selection",
+          "1.8",
+          "(0.6)"
+        ],
+        [
+          "Currency",
+          "0.0",
+          "0.0"
+        ]
+      ]
+    },
+    {
+      "type": "mystery_component",
+      "title": "Unknown Type"
+    },
+    {
+      "type": "text_block",
+      "title": null,
+      "text": "A block with no title, to prove the heading is optional."
+    }
+  ]
+}

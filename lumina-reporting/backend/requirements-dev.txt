@@ -1,2 +1,9 @@
 -r requirements.txt
 pytest==8.3.2
+pytest-asyncio==0.24.0
+# Test-only. The print tests read PDFs back (pypdf) and compare rasterised
+# pages (Pillow); production rendering needs neither, so they stay out of
+# requirements.txt. Both were transitively present until Phase A imported
+# them directly -- pypdf, in fact, was not a dependency of anything.
+pypdf==6.18.1
+Pillow==12.3.0

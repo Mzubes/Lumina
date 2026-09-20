@@ -1,0 +1,340 @@
+{% import 'charts.html' as charts %}
+{#
+  The document. One Jinja template, one stylesheet, no JavaScript.
+
+  Every colour below is a literal hex resolved in Python -- see
+  html_pdf_renderer._theme(). Nothing here may use color-mix(): WeasyPrint
+  drops it silently, and a test asserts its absence.
+#}
+<style>
+  @page {
+    size: A4;
+    /* Margin boxes do NOT inherit from body -- they take the page
+       context's initial value, which is serif. The running header and
+       footer were therefore set in DejaVu Serif while the document was
+       DejaVu Sans, on every page of every document. Caught by counting
+       the faces embedded in the PDF. */
+    font-family: "DejaVu Sans", "Helvetica Neue", Helvetica, Arial, sans-serif;
+    /* A pinned band is out of flow, so its height is reserved in the page
+       MARGIN rather than as body padding: padding applies once to the
+       whole block, so it only cleared the band on page one and the header
+       landed on the table from page two onward. The band is then pulled
+       up into the reserved strip -- verified that the engine paints a
+       fixed element there, on every page. */
+    margin: {{ 26 + reserved.top }}mm 16mm {{ 20 + reserved.bottom }}mm 16mm;
+
+    /* Running header and footer. fpdf2 had to simulate these by drawing on
+       every page; here the engine owns them, so they cannot drift. */
+    {% if document_header %}
+    @top-left {
+      content: "{{ header.title | default(content.report_title, true) }}";
+      font-size: 7.5pt; color: {{ theme.muted }};
+      border-bottom: .4pt solid {{ theme.rule }};
+      width: 100%; vertical-align: bottom; padding-bottom: 3mm;
+    }
+    @bottom-left {
+      content: "{{ footer.text | default('', true) }}";
+      font-size: 7pt; color: {{ theme.muted }};
+    }
+    @bottom-right {
+      /* The page counter fpdf2 could not produce at all: total pages are
+         unknown until layout finishes, so only the engine can fill it. */
+      content: "Page " counter(page) " of " counter(pages);
+      font-size: 7pt; color: {{ theme.muted }};
+    }
+    {% endif %}
+    {% for box in margin_boxes %}
+    /* A page_number lifted out of a repeating band, because the counter
+       freezes inside one. Placed in the margin box nearest where it was
+       authored -- see renderers/layout.pin_repeating_bands(). */
+    {{ box }} {
+      content: counter(page) " of " counter(pages);
+      font-size: 7pt; color: {{ theme.muted }};
+      /* The box is sized to its content; without this the counter wraps
+         one character per line. */
+      white-space: nowrap;
+    }
+    {% endfor %}
+  }
+
+  html { font-size: 10pt; }
+  body {
+    font-family: "DejaVu Sans", "Helvetica Neue", Helvetica, Arial, sans-serif;
+    color: {{ theme.ink }}; line-height: 1.42; margin: 0;
+  }
+
+  .doc-title { font-size: 17pt; font-weight: 700; color: {{ theme.primary }}; margin: 0 0 1mm; }
+  .doc-subtitle { font-size: 9pt; color: {{ theme.muted }}; margin: 0 0 1.5mm; }
+  .doc-meta { font-size: 7.5pt; color: {{ theme.muted }}; margin: 0 0 7mm; }
+  .doc-rule { height: 2pt; background: {{ theme.accent }}; margin: 0 0 7mm; }
+
+  .component { margin-bottom: 8mm; }
+  /* Keep-together, but ONLY for a section short enough to fit. Applying it
+     to every section costs a page each time: the engine first tries to
+     honour it by pushing an over-tall section to a fresh page, then gives
+     up and breaks it anyway, leaving the page before it blank. Measured --
+     the 60-row fixture opened with a page at 1% ink. The renderer decides
+     which sections qualify; see _is_compact(). */
+  .component-compact { break-inside: avoid; }
+  /* Keep a section's heading with at least the start of its content -- a
+     title stranded alone at the foot of a page is the classic giveaway
+     that a document was generated rather than typeset. */
+  .component h2 {
+    font-size: 10.5pt; font-weight: 700; color: {{ theme.primary }};
+    margin: 0 0 2.5mm; padding-bottom: 1.2mm;
+    border-bottom: .5pt solid {{ theme.rule }};
+    break-after: avoid;
+  }
+
+  table { width: 100%; border-collapse: collapse; font-size: 8.5pt; }
+  /* Repeats the header row on every page a long table spans. */
+  thead { display: table-header-group; }
+  tr { break-inside: avoid; }
+  th {
+    background: {{ theme.primary }}; color: #ffffff; text-align: left;
+    padding: 2.2mm 2mm; font-size: 7.5pt; font-weight: 700;
+    letter-spacing: .03em; text-transform: uppercase;
+  }
+  td { padding: 1.9mm 2mm; border-bottom: .4pt solid {{ theme.rule }}; }
+  tbody tr:nth-child(even) td { background: {{ theme.zebra }}; }
+  .num { text-align: right; font-variant-numeric: tabular-nums; }
+
+  .text-block { font-size: 9pt; white-space: pre-wrap; }
+
+  .people { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4mm; }
+  .person { break-inside: avoid; font-size: 8.5pt; }
+  .person-name { font-weight: 700; color: {{ theme.primary }}; }
+  .person-meta { color: {{ theme.muted }}; font-size: 7.5pt; }
+
+  /* Charts. Ports of the app's own components -- pure HTML/CSS for bars
+     and the composition track, static SVG for the ring. Vector at any DPI,
+     no library, no rasterised figure. Geometry comes from
+     renderers/charts.py; nothing here computes a scale. */
+  .chart { margin-top: 3mm; break-inside: avoid; }
+  /* Keeps a chart with the table it belongs to. Verified honoured: without
+     it the ring for one section stranded itself at the top of the next
+     page, arriving under the previous section's heading. */
+  .chart { break-before: avoid; }
+  .chart-row { display: grid; grid-template-columns: 34mm 1fr; gap: 2.5mm;
+               align-items: center; margin-bottom: 1.6mm; }
+  .chart-label { font-size: 7.5pt; color: {{ theme.ink }}; }
+  .chart-bars { display: flex; flex-direction: column; gap: 0.5mm; }
+  /* The bar and its direct label share a row. The label is what replaces
+     the screen component's hover tooltip -- on paper there is nowhere else
+     for the value to live. */
+  .chart-bar-line { display: flex; align-items: center; gap: 1.5mm; }
+  /* Diverging layout: two equal halves either side of a zero line, each
+     bar hugging the line and growing outward. The zero line is the rule
+     between them. */
+  .chart-bar-signed { gap: 0; }
+  .chart-side { flex: 1 1 0; min-width: 0; display: flex;
+                align-items: center; gap: 1.5mm; }
+  .chart-side-neg { justify-content: flex-end;
+                    border-right: .5pt solid {{ theme.rule }}; padding-right: 1mm; }
+  .chart-side-pos { padding-left: 1mm; }
+  .chart-bar { height: 2.4mm; border-radius: 1mm; display: inline-block; }
+  .chart-value { font-size: 7pt; color: {{ theme.muted }};
+                 font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+  /* Single stacked track. flex-grow keeps the segments summing to exactly
+     the track width however the percentages round; the surface-coloured
+     gap separates touching fills without a border. */
+  .chart-track { display: flex; height: 5mm; border-radius: 1mm;
+                 overflow: hidden; gap: 0.5mm; }
+  .chart-segment { display: block; }
+
+  /* The SVG is authored at the content width; this lets it scale down
+     if the box is narrower, without an aspect-ratio (which WeasyPrint
+     drops silently). */
+  .chart-vega svg { max-width: 100%; height: auto; }
+
+  .chart-donut { display: grid; grid-template-columns: 38mm 1fr;
+                 gap: 4mm; align-items: center; }
+  .chart-donut-legend .chart-legend { display: flex; flex-direction: column;
+                                      gap: 1.2mm; margin-top: 0; }
+
+  /* Always present for two or more series: identity is never colour alone. */
+  .chart-legend { display: flex; flex-wrap: wrap; gap: 2mm 5mm; font-size: 7pt;
+                  color: {{ theme.muted }}; margin-top: 2mm; }
+  .chart-legend-item { white-space: nowrap; }
+  .chart-swatch { display: inline-block; width: 2.4mm; height: 2.4mm;
+                  border-radius: .6mm; margin-right: 1.2mm; }
+
+  /* Muted, not italic. DejaVu Sans ships no oblique face, so asking for
+     one made the engine synthesize or substitute whichever italic the
+     HOST happened to have -- the same document rendered differently on
+     two machines, which CI caught as a content-stream mismatch on the one
+     fixture that used it. A client's PDF must not depend on the render
+     host's font set; see the allow-list test in
+     test_html_pdf_renderer.py. */
+  .empty { font-size: 8.5pt; color: {{ theme.muted }}; }
+
+  /* ---- fixed bands (Phase D) -------------------------------------------
+     A declared height with its contents anchored inside it. A flow band is
+     still the stacking default; this is the other half of the model. */
+  .band-fixed { position: relative; }
+  .el { position: absolute; font-size: 8.5pt; overflow: hidden; }
+  /* A bound element inside a FLOW band takes the band's width and grows
+     with its content -- the anchoring only applies inside a fixed band. */
+  .el-inline { position: static; overflow: visible; }
+  .el-fill, .el-rule { display: block; width: 100%; height: 100%; }
+  .el img { width: 100%; height: 100%; object-fit: contain; }
+  .el table { font-size: 7.5pt; }
+  .el .is-subtotal td { font-weight: 700; border-top: .4pt solid {{ theme.rule }}; }
+  .el .is-total td { font-weight: 700; border-top: .8pt solid {{ theme.primary }}; }
+
+  /* A repeating band is drawn once and replicated by the engine, which is
+     why the page counter inside one FREEZES -- measured: every page of a
+     seven-page document read "p 1 of 7". A page_number element in a
+     repeating band is therefore emitted into a @page margin box instead
+     (below), where the counter resolves per page. */
+  .band-top { position: fixed; top: -{{ reserved.top }}mm; left: 0; right: 0; }
+  .band-bottom { position: fixed; bottom: -{{ reserved.bottom }}mm; left: 0; right: 0; }
+  /* Outside a repeating band the counter resolves normally, so an
+     ordinary page_number element can stay where it was placed. */
+  .el-page-number::after { content: counter(page) " of " counter(pages); }
+
+  /* ---- the style vocabulary (Phase E3) ---------------------------------
+     schema_v2/styling.py is the closed list; these are its meanings in
+     this renderer. An element names a ROLE and the stylesheet decides what
+     the role looks like, so a template stays renderer-agnostic and a
+     rebrand does not have to rewrite every element.
+
+     A token with no rule here draws nothing rather than injecting an
+     unknown declaration -- which is the whole reason these are classes and
+     not inline style. */
+  .st-heading-1 { font-size: 15pt; font-weight: 700; color: {{ theme.primary }}; }
+  .st-heading-2 { font-size: 11.5pt; font-weight: 700; color: {{ theme.primary }}; }
+  .st-heading-3 { font-size: 9.5pt; font-weight: 700; color: {{ theme.ink }}; }
+  .st-body { font-size: 8.5pt; color: {{ theme.ink }}; }
+  .st-body-small { font-size: 7.5pt; color: {{ theme.ink }}; }
+  .st-label {
+    font-size: 6.5pt; font-weight: 700; letter-spacing: .08em;
+    text-transform: uppercase; color: {{ theme.muted }};
+  }
+  /* Tabular figures: a column of numbers whose digits are not the same
+     width does not line up, which is the fastest way a generated table
+     looks amateur. */
+  .st-figure { font-size: 14pt; font-weight: 700; color: {{ theme.ink }};
+               font-variant-numeric: tabular-nums; }
+  .st-figure-large { font-size: 22pt; font-weight: 700; color: {{ theme.primary }};
+                     font-variant-numeric: tabular-nums; }
+  .st-caption { font-size: 7pt; color: {{ theme.muted }}; }
+  .st-disclosure { font-size: 6.5pt; color: {{ theme.muted }}; }
+
+  .align-left { text-align: left; }
+  .align-center { text-align: center; }
+  .align-right { text-align: right; }
+
+  /* Vertical placement inside a fixed band's box. Flex rather than
+     line-height, which only works for one line. */
+  .va-top, .va-middle, .va-bottom { display: flex; flex-direction: column; }
+  .va-top { justify-content: flex-start; }
+  .va-middle { justify-content: center; }
+  .va-bottom { justify-content: flex-end; }
+
+  /* Colour by ROLE. No element carries a hex -- see styling.py. */
+  .color-ink { color: {{ theme.ink }}; }
+  .color-muted { color: {{ theme.muted }}; }
+  .color-primary { color: {{ theme.primary }}; }
+  .color-accent { color: {{ theme.accent }}; }
+  /* A rule element takes its colour as a background, since it has no text. */
+  .color-primary .el-rule, .color-primary.el-line .el-rule { background: {{ theme.primary }}; }
+  .color-accent .el-rule, .color-accent.el-line .el-rule { background: {{ theme.accent }}; }
+
+  .border-top { border-top: .8pt solid {{ theme.rule }}; }
+  .border-bottom { border-bottom: .8pt solid {{ theme.rule }}; }
+  .border-box { border: .8pt solid {{ theme.rule }}; }
+  /* Any border means the text should not sit against it. */
+  .border-top, .border-bottom, .border-box { padding: 1.5mm 0; }
+  .border-box { padding: 1.5mm 2mm; }
+
+  .fill-tint { background: {{ theme.primary_tint }}; padding: 1.5mm 2mm; }
+  .fill-tint-strong { background: {{ theme.primary_tint_strong }}; padding: 1.5mm 2mm; }
+  .fill-accent-tint { background: {{ theme.accent_tint }}; padding: 1.5mm 2mm; }
+</style>
+
+{# Page furniture for the legacy path only. A v2 template designs its own
+   masthead as a fixed band, so forcing this on top of it would give the
+   document two titles. #}
+{% if document_header %}
+<h1 class="doc-title">{{ header.title | default(content.report_title, true) }}</h1>
+{% if header.subtitle %}<p class="doc-subtitle">{{ header.subtitle }}</p>{% endif %}
+<p class="doc-meta">
+  {%- if content.client_name %}{{ content.client_name }} · {% endif -%}
+  Generated {{ content.generated_at[:10] }}
+</p>
+<div class="doc-rule"></div>
+{% endif %}
+
+{# The renderer draws the layout tree, never the flat component list --
+   see renderers/layout.py. A legacy template yields one flow band per
+   component, each holding one full-width element (two, when a table also
+   charts its rows), which is what the flat list always meant. #}
+{% for section in sections %}
+  {%- if section.layout_mode == 'fixed' %}
+{{ charts.fixed_band(section, theme) }}
+  {%- else %}
+  <section class="component{{ ' component-compact' if section.compact }}">
+    {% if section.name %}<h2>{{ section.name }}</h2>{% endif %}
+
+    {%- for element in section.elements %}
+      {%- set component = element.content %}
+      {#- A v2 element draws through the same macros a fixed band uses;
+          a legacy one carries a whole resolved component and has its own
+          branches below. `legacy` is the discriminator, set only by
+          layout_from_components. binding_kind used to be, and it was
+          wrong: an unbound v2 element -- static words, a rule, a box --
+          fell through to the legacy chain and rendered nothing. -#}
+      {% if not element.legacy %}
+      <div class="el el-inline el-{{ element.element_type }} {{ element | style_classes }}">{{ charts.element_body(element, theme) }}</div>
+
+    {% elif element.element_type == 'text' %}
+      <div class="text-block">{{ component.text }}</div>
+
+    {% elif element.element_type == 'people_grid' %}
+      <div class="people">
+        {% for person in component.people or [] %}
+          <div class="person">
+            <div class="person-name">{{ person.name }}</div>
+            {% if person.title %}<div class="person-meta">{{ person.title }}</div>{% endif %}
+            {% if person.detail %}<div class="person-meta">{{ person.detail }}</div>{% endif %}
+          </div>
+        {% endfor %}
+      </div>
+
+    {% elif element.element_type == 'table' %}
+      {% if component.rows %}
+        <table>
+          <thead>
+            <tr>
+              {% for column in component.columns %}
+                <th class="{{ 'num' if component.numeric_columns[loop.index0] else '' }}">{{ column }}</th>
+              {% endfor %}
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in component.formatted_rows %}
+              <tr>
+                {% for cell in row %}
+                  <td class="{{ 'num' if component.numeric_columns[loop.index0] else '' }}">{{ cell }}</td>
+                {% endfor %}
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      {% elif not component.chart %}
+        <p class="empty">No data on file for this section.</p>
+      {% endif %}
+
+    {% elif element.element_type == 'chart' %}
+      {{ charts.chart(component.chart) }}
+    {% endif %}
+    {%- endfor %}
+
+    {%- if not section.elements %}
+      <p class="empty">Nothing to display.</p>
+    {%- endif %}
+  </section>
+  {%- endif %}
+{% endfor %}

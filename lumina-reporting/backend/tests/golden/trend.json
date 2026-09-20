@@ -1,0 +1,221 @@
+{
+  "report_title": "Performance Trends",
+  "client_name": "Meridian Pension Partners",
+  "generated_at": "2026-06-30T09:00:00",
+  "header_config": {
+    "title": "Performance Trends",
+    "subtitle": "Twelve months to 30 June 2026"
+  },
+  "footer_config": {
+    "text": "Confidential \u2014 for institutional use only"
+  },
+  "theme_config": {
+    "primary_color": "#0d6b5f",
+    "accent_color": "#c9bd9a"
+  },
+  "components": [
+    {
+      "type": "data_table",
+      "title": "Growth of $100 \u2014 Strategy vs Index",
+      "chart_type": "line",
+      "columns": [
+        "Month",
+        "Strategy",
+        "Index"
+      ],
+      "rows": [
+        [
+          "Jun 25",
+          100,
+          100
+        ],
+        [
+          "Jul",
+          102.4,
+          101.2
+        ],
+        [
+          "Aug",
+          101.1,
+          100.4
+        ],
+        [
+          "Sep",
+          104.8,
+          102.1
+        ],
+        [
+          "Oct",
+          103.2,
+          101.6
+        ],
+        [
+          "Nov",
+          107.9,
+          104.0
+        ],
+        [
+          "Dec",
+          110.4,
+          105.8
+        ],
+        [
+          "Jan 26",
+          109.1,
+          105.1
+        ],
+        [
+          "Feb",
+          112.6,
+          107.2
+        ],
+        [
+          "Mar",
+          111.0,
+          106.4
+        ],
+        [
+          "Apr",
+          115.3,
+          109.0
+        ],
+        [
+          "May",
+          117.8,
+          110.1
+        ],
+        [
+          "Jun",
+          119.2,
+          111.0
+        ]
+      ]
+    },
+    {
+      "type": "data_table",
+      "title": "Strategy, indexed",
+      "chart_type": "area",
+      "columns": [
+        "Month",
+        "Strategy"
+      ],
+      "rows": [
+        [
+          "Jun 25",
+          100
+        ],
+        [
+          "Jul",
+          102.4
+        ],
+        [
+          "Aug",
+          101.1
+        ],
+        [
+          "Sep",
+          104.8
+        ],
+        [
+          "Oct",
+          103.2
+        ],
+        [
+          "Nov",
+          107.9
+        ],
+        [
+          "Dec",
+          110.4
+        ],
+        [
+          "Jan 26",
+          109.1
+        ],
+        [
+          "Feb",
+          112.6
+        ],
+        [
+          "Mar",
+          111.0
+        ],
+        [
+          "Apr",
+          115.3
+        ],
+        [
+          "May",
+          117.8
+        ],
+        [
+          "Jun",
+          119.2
+        ]
+      ]
+    },
+    {
+      "type": "data_table",
+      "title": "Net Flows ($m)",
+      "chart_type": "area",
+      "columns": [
+        "Month",
+        "Net flows"
+      ],
+      "rows": [
+        [
+          "Jun 25",
+          0
+        ],
+        [
+          "Jul",
+          12
+        ],
+        [
+          "Aug",
+          18
+        ],
+        [
+          "Sep",
+          9
+        ],
+        [
+          "Oct",
+          24
+        ],
+        [
+          "Nov",
+          31
+        ],
+        [
+          "Dec",
+          28
+        ],
+        [
+          "Jan 26",
+          16
+        ],
+        [
+          "Feb",
+          35
+        ],
+        [
+          "Mar",
+          41
+        ],
+        [
+          "Apr",
+          38
+        ],
+        [
+          "May",
+          47
+        ],
+        [
+          "Jun",
+          52
+        ]
+      ]
+    }
+  ]
+}

@@ -1,0 +1,623 @@
+# Document engine — phased plan
+
+Replacing Lumina's template design and rendering stack so it can produce
+marketing-quality documents from a visual canvas.
+
+Status: **plan only.** Nothing below is built. Written after proving the two
+load-bearing technical claims in this repo's own environment (see
+[Evidence](#evidence-already-gathered)).
+
+---
+
+## What's settled
+
+| Decision | Made |
+|---|---|
+| Lumina reports and displays **finalized** warehouse data (Snowflake) | confirmed |
+| It **calculates nothing** — no accounting, performance or attribution | confirmed |
+| Reconciliation happens **upstream**; Lumina gates publishing on the attestation | confirmed |
+| The deliverable is a **marketing-quality document** | confirmed |
+| Template authoring must be a **visual canvas**, not a form | confirmed |
+| Layout supports **both** absolute placement and flowing bands | confirmed |
+| **PPTX stays in scope** as a second renderer | confirmed |
+| Template authors are ops, working from approved blocks; **marketing sets guidelines and retrieves content** | confirmed |
+| Data model v2 (24 tables: entities + `Dataset`/`DisplaySpec` + `DataLoad` + `ReportSnapshot` + `BrandKit`) | designed, tested, not wired in |
+
+---
+
+## The gap, stated plainly
+
+| | Today | Needed |
+|---|---|---|
+| Template editor | Vertical stack of collapsible cards. dnd-kit reorder only. **No x/y, no page, no free placement.** | Page-geometry canvas with select / drag / resize / snap / align |
+| Renderer | `fpdf2` — imperative cursor writer. Core fonts **latin-1 only**; `pdf_renderer.py` carries a substitution table that silently turns em-dashes into hyphens | CSS Paged Media: running headers, page counters, controlled breaks, repeating table headers, real webfonts |
+| Charts in PDF | matplotlib raster, bolted in per component | Vector SVG from the same components the app already renders |
+| Template model | Flat ordered list of components | Sections (bands) bound to a dataset, containing positioned elements |
+| Report reproducibility | PDF frozen at `file_path`, but export/preview **re-resolve live** — they disagree after any restatement | Frozen `ReportSnapshot` at approval; every format renders from it |
+
+---
+
+## Sequencing principle
+
+**Renderer before canvas.**
+
+The renderer is what makes marketing quality possible at all, and it can be
+proven against the *existing* component model with no UI change — every
+template in the system gets better the day it ships. Build the canvas first
+and you are designing against a renderer that cannot honour what you draw.
+
+The registry at `backend/renderers/__init__.py` is already the seam:
+
+```python
+RENDERERS = {'pdf': render_pdf, 'pptx': render_pptx, 'xlsx': render_xlsx, 'raw': render_raw}
+```
+
+Swapping the PDF entry is one line plus one new module. Everything upstream
+of it — `resolve_report_content()` and its payload contract — is untouched.
+
+---
+
+## Phases
+
+Each ships independently and is reversible. Sizes are rough engineering
+estimates, not commitments.
+
+### A · WeasyPrint renderer behind the existing model · ~1 week
+
+**Goal:** every existing template renders dramatically better, with zero UI
+change and zero data-model change.
+
+- New `renderers/html_pdf_renderer.py`: resolved payload → Jinja HTML → WeasyPrint
+- Component templates for the types already in `report_content.py`
+  (`holdings_table`, `performance`, `text_block`, `data_table`, `people_grid`,
+  `report_reference`, disclosures)
+- `@page` rules from `ReportTemplate.header_config` / `footer_config`:
+  running header, running footer, `counter(page)`/`counter(pages)`
+- `theme_config` → CSS custom properties, so existing themed templates carry over
+- Keep `fpdf2` registered as `pdf_legacy` for one release, for side-by-side
+
+**Verification:** render the seeded Pzena factsheet both ways, diff visually,
+and assert the Unicode that fpdf2 currently mangles survives intact.
+
+**Risk:** low. Additive; old path stays until the new one is signed off.
+
+---
+
+### B · Print-CSS discipline · ~2–3 days · **SHIPPED**
+
+**Goal:** stop the silent-failure class found in testing.
+
+Probing 18 CSS features against the real engine found **two** silent
+failures, not one:
+
+| Feature | Result |
+|---|---|
+| `color-mix()` | draws nothing — `styles.css` uses it 48 times |
+| `aspect-ratio` | draws nothing — a natural reach for a chart container |
+
+Everything else tried renders correctly, **CSS grid and flexbox included**,
+which is what makes a real layout engine viable here at all. The full
+matrix is `tests/test_print_css_support.py`, and it is pinned in both
+directions: a WeasyPrint upgrade that *starts* supporting one of the two
+fails the suite, so the allow-list widens deliberately rather than by
+accident.
+
+- `tests/test_print_css_lint.py` scans every print-path source for a banned
+  feature and reports file and line. The banned list is derived from the
+  support matrix rather than restated, so there is no second list to forget.
+  Commentary is stripped first — the template's own warning about
+  `color-mix()` must stay writable.
+- `tests/test_golden_documents.py` renders three fixtures (a factsheet, a
+  60-row table that spans pages, and an edge-case document), rasterises
+  every page, and compares against committed references.
+
+Comparison runs on a **downsampled fingerprint**, not raw pixels: the same
+document rasterised on two machines differs in thousands of glyph-edge
+pixels without one visible change, so an exact-match test would be either
+permanently red or uselessly loose. Measured separation on the factsheet:
+
+| Change | Difference |
+|---|---|
+| none | 0.00% |
+| one table row dropped | 3.9% |
+| theme colour changed | 9.5% |
+| chart removed | 100% |
+| footer wording changed | 0.06% |
+
+The 1% threshold sits cleanly between. The last row is the honest limit: a
+coarse fingerprint cannot see a reworded footer, which is why the running
+header and footer keep their own assertions in `test_html_pdf_renderer.py`.
+
+A committed canary (`tests/golden/_environment.png`) renders text through
+the engine but **not** through the report template. If it mismatches, the
+machine lays out text differently and the golden tests **skip with that
+reason** instead of failing — a red build for a reason nobody can act on is
+worse than a gap you can read. CI installs `poppler-utils` and
+`fonts-dejavu-core` so the tests actually run there rather than skipping.
+
+**Verified:** raising the table font size 8.5pt → 10.5pt fails the golden
+tests (4.2% and 14.3%) while leaving the canary matched — proving the guard
+discriminates between "the document changed" and "this machine is
+different". The lint catches a synthetic `color-mix` and ignores it in
+comments. Also fixed in this phase: `pypdf`, imported by the Phase A tests,
+was a dependency of nothing — CI would have failed on import.
+
+---
+
+### C · Server-side chart pipeline · ~1 week · **SHIPPED**
+
+**Goal:** vector charts in print, from one definition.
+
+Three tiers, in order of preference:
+
+1. **Existing components, as markup.** `BarChart` and `CompositionBar` are
+   pure HTML/CSS (zero SVG elements); `AreaChart` and `DonutChart` are static
+   SVG. All four render in WeasyPrint natively. Port their markup+CSS into
+   the Jinja component templates — no library. **Done** (`renderers/charts.py`,
+   `renderers/templates/charts.html`): bars, composition and ring.
+2. **Vega-Lite via `vl-convert-python`** for the trend forms that need a
+   computed axis. **Done** (`renderers/vega_charts.py`). Pure Rust, no Node,
+   no browser; ~25ms steady state, so rendering stays synchronous. The spec
+   is themed to the document — its font, its muted ink, hairline rules — so
+   a chart does not read as something pasted in from another program.
+3. matplotlib (already a dependency) as the escape hatch.
+
+**Two more defects, also found by looking (C3):**
+
+- **The x-axis sorted itself alphabetically.** Vega orders an ordinal
+  domain by value unless told otherwise, so a growth-of-$100 chart came
+  out Apr, Aug, Dec, Feb, Jan, Jul, Jun… — a plausible-looking picture of
+  nonsense, with nothing but the axis to give it away. Fixed with
+  `sort: None`, and pinned by reading the label order back out of the
+  rendered SVG.
+- **An indexed series asked for as an area rendered flat.** An area fill
+  encodes magnitude measured from the baseline, so Vega correctly forces
+  that baseline to zero — which crushes a 100→119 series into a straight
+  line at the top of an empty plot. The fill is not what that chart is
+  about, so a series that never approaches zero now becomes a line with a
+  truncated axis. A series that does reach or cross zero keeps both.
+
+The tier-2 SVG is inlined into the document unescaped, which is only safe
+because `vl_convert` escapes every data-derived string into SVG text — a
+label of `</text></svg><script>` comes back escaped, not as markup. That
+is pinned by a test, because report labels arrive from a warehouse.
+
+**The palette (C1) — the measurement stands, my conclusion from it did
+not.** The shipped `--cat-1..6` order fails the normal-vision floor:
+magenta and red adjacent at ΔE 13.2, under the floor of 15. All 120
+re-orderings of those six hues were enumerated against the validator and
+none clears every gate, so the repair is the two missing hues (yellow,
+green), not a re-shuffle.
+
+I first read this as a print/screen divergence and shipped two palettes.
+That was wrong: screen charts sit on `--panel-bg`, which is `#ffffff` —
+the same ground as paper. There was never a reason for two. `styles.css`
+now carries the same validated eight in the same order, pinned by a test
+that reads the stylesheet from the backend, and the frontend's four
+duplicated copies of the colour list are one module. Fixing it also
+turned up `CATEGORICAL_COLORS[index % length]`, which handed the ninth
+series the first one's hue.
+
+`renderers/color_science.py` ports the validator's arithmetic into Python
+so a brand kit's own `chart_series` can be checked where it is used — node
+cannot run in production. The port is pinned to the reference numbers. A
+brand palette that fails falls back to the default: rendering a client
+document off-brand beats rendering one whose series are indistinguishable.
+
+**Two defects found by looking at renders, not by tests:**
+
+- **A negative value drew as a positive-length bar.** An attribution of
+  −40bps was indistinguishable from +40bps and longer than a real +15 —
+  a false chart, not a rough one. Bar charts now go diverging (zero line
+  down the middle, bars growing outward) as soon as any value is negative.
+- **Keep-together cost a page per long section.** `break-inside: avoid` on
+  every section made the 60-row fixture open on a page at 1% ink: the
+  engine tries to honour the rule by pushing an over-tall section to a
+  fresh page, then gives up and breaks it anyway. It now applies only to
+  sections a height estimate says will fit in half a page.
+
+Both are pinned by tests, as is the pagination behaviour they depend on
+(`break-before: avoid` is honoured; `break-inside: avoid` degrades rather
+than clipping — worth proving, since clipping would silently drop rows
+from a client's statement).
+
+**Verification:** three chart types rendered at 150dpi and inspected; series
+colours match the palette; all vector, no raster artefacts. Golden
+references regenerated; tolerance tightened to 0.5% because keep-together
+shrank the blast radius of a small edit from 3.9% to 1.4%.
+
+---
+
+### D · Template model v2 — sections and elements · ~1.5 weeks · **SHIPPED**
+
+**Goal:** the Coric-shaped model, expressed in the schema.
+
+```
+DocumentTemplate
+  └─ TemplateSection    layout_mode: 'flow' | 'fixed'
+  │                     flow  -> stacks, may iterate a DisplaySpec, breaks across pages
+  │                     fixed -> a declared height, contents anchored, may repeat per page
+  │                     + page-break rules, orientation, repeat-on-every-page
+  └─ TemplateElement    x, y, w, h, z, type, binding, style
+                        anchored WITHIN its section, in millimetres
+                        text | field | table | chart | image | line | box |
+                        page_number | people_grid
+```
+
+Named `DocumentTemplate`, not `ReportTemplate`: models.py still has a live
+class by that name, and two SQLAlchemy classes sharing a name across two
+registries is a debugging trap for the whole cutover.
+
+**Millimetres, not pixels.** A document is a physical artefact. mm converts
+cleanly to CSS mm, to PowerPoint's EMU and to PDF points; px bakes in a DPI
+only one of the three shares.
+
+**The renderer-agnostic rule is enforced, not documented.** `style_token`
+carries a CHECK constraint rejecting anything containing a colon or a
+semicolon — which a CSS declaration always has and a brand-kit token name
+never does. An HTML-only template built by accident would otherwise only
+surface when the PPTX renderer ran in Phase G, which is far too late.
+
+Three more constraints carry design decisions rather than hygiene, each
+proven by letting the database reject the row:
+
+- a fixed band declares a height and a flow band does not — that is what
+  the two words mean;
+- only a fixed band may repeat, because a band whose height is its
+  content's cannot be drawn identically on every page;
+- only a flow band may iterate a spec, because N rows means N bands and a
+  height that is not knowable in advance.
+
+**`renderers/layout.py` is the cutover seam.** It turns either model into
+one tree, and the renderer reads nothing else. Today's flat list becomes
+one flow band per component holding one full-width element — two when a
+table also charts its rows, in the same band so a page break can never
+separate them. An unrecognised component yields an empty band rather than
+a guess.
+
+**Verification — and a correction to how it was specified.** The plan asked
+for byte-comparable output. Whole-file PDF bytes turned out to be the wrong
+instrument: the file is Flate-compressed, so insignificant whitespace in the
+generated HTML — which reordering a Jinja block inevitably causes —
+reshuffles most of the file while drawing an identical page. Chasing that
+would have meant contorting the template to reproduce the old one's blank
+lines, permanently, to satisfy a proxy.
+
+Measured instead on the **uncompressed page content streams**, which are
+the drawing itself: insensitive to how the file was packed, exactly
+sensitive to what landed where. **All four golden fixtures, every page,
+byte-identical to the pre-Phase-D renderer**, and every rendered page
+fingerprint differs by 0.0000%. The baseline is committed
+(`tests/golden/content_streams.json`) so the invariant holds going forward.
+
+**The binding resolver** (`renderers/bindings.py`) fills a v2 tree's
+content, and `display_spec.py` is the engine behind it: filter, sort,
+group, subtotal, cap. Two properties in it are load-bearing:
+
+- **A capped table still totals the whole portfolio.** The grand total is
+  taken over everything that survived the *filter*, before the row limit,
+  and the remainder row reconciles the difference. The first cut totalled
+  only the rows that fit, which told a client two thirds of their money
+  had gone missing — in a table that looked entirely normal.
+- **A pre-computed measure is never aggregated.** Adding two time-weighted
+  returns produces a number that is wrong and looks plausible, so the
+  subtotal cell is left blank. The schema already forbids such a field
+  from carrying an aggregation; this honours it at render time.
+
+Capping now happens *before* grouping. Doing it after put subtotal rows in
+the folded tail, so the remainder double-counted them and came out larger
+than the grand total — which is how the bug announced itself.
+
+**The fixed-band path** renders anchored elements inside a declared-height
+band, and `repeat_mode` works. Three findings, each probed rather than
+assumed:
+
+| Finding | Consequence |
+|---|---|
+| `position: fixed` repeats a band on every page | the mechanism for a page header or footer of arbitrary elements — `@page` margin boxes take simple content only |
+| **a page counter inside a repeating band freezes** | measured: every page of a seven-page document read "p 1 of 7". A `page_number` element is lifted into the `@page` margin box nearest where it was authored, the only place the counter resolves |
+| a pinned band's space must be reserved in the **page margin** | body padding reserves it once for the whole block, so the masthead cleared page one and landed on the table from page two onward |
+
+A repeating band pins to the top when it is the first section and the
+bottom when it is the last. That is the only reading the model supports —
+a repeating band in the middle of the flow has no page position to take —
+and `validate()` rejects that case rather than guessing.
+
+A v2 template draws its own masthead and footer, so the legacy page
+furniture is suppressed for it; the legacy path keeps it, and the
+content-stream baseline still holds byte-identical.
+
+---
+
+### E · The canvas · ~3–4 weeks
+
+**Goal:** the visual designer. Largest phase; sub-phases ship in order.
+
+**Reframed by the authoring decision.** This is not a freeform design tool.
+Templates are built by client-reporting ops from **approved building blocks**,
+inside guardrails marketing sets:
+
+- Colour and type are chosen from `BrandKit` **tokens**, never a free colour
+  picker or font dropdown. Off-brand output should be unreachable, not
+  discouraged.
+- New sections start from the preset library (`templateLibrary.js` already
+  holds the right catalogue — Fund Facts, Sector Weights, Region
+  Concentration and the rest). A blank page is available but is not the
+  default path.
+- Free placement is real, but snapped to the brand grid and margin guides.
+- Marketing's role here is **governance, not authoring**: they own the brand
+  kit, the approved block catalogue and the disclosure rules. They are not
+  expected to open the canvas.
+
+| | Sub-phase | Delivers |
+|---|---|---|
+| E1 | Page surface + element model · **SHIPPED** | A4/Letter, portrait/landscape, margins, rulers, grid, zoom. Elements as absolutely-positioned DOM. |
+| E2 | Direct manipulation · **SHIPPED** | Select, multi-select, drag, resize handles, snap-to-grid, snap-to-element, alignment guides, z-order, keyboard nudge, undo/redo. Built on pointer events — no library. |
+| E3 | Properties inspector | Right panel: position, size, typography, colour from the brand kit, borders, padding — the Coric Properties pane. |
+| E4 | Data binding | Bind an element to a `DatasetField` or `DisplaySpec`. Field picker driven by the dataset's own metadata. Live sample values on the canvas. |
+| E5 | Sections + outline | Left/right outline of sections and pages, matching Coric's Sections pane. Band properties: data source, break behaviour, orientation. |
+| E6 | Live preview | Render to PDF server-side, show beside the canvas. Same HTML both sides, so drift is structural zero. |
+
+**Explicitly not Fabric.js or Konva.** Those draw to a bitmap canvas —
+elements become canvas objects, which means reimplementing text layout, line
+breaking, kerning and table flow, and then writing a second renderer for PDF.
+Two layout engines that drift. A report is mostly text in tables; the browser
+already does that perfectly.
+
+**E1 as built.** The canvas lays out in CSS `mm` — the same unit
+`renderers/templates/report.html` uses — so there is no conversion in the
+layout path and nothing to drift. `paper.js` holds the geometry (page
+sizes, margins, content box, ruler ticks, grid, snapping, clamping) and is
+unit-tested; `MM_TO_PX` exists only for the ruler, which has to be drawn
+in device pixels.
+
+Measured in a real browser rather than asserted:
+
+| | Expected | Actual |
+|---|---|---|
+| A4 sheet | 793.70 × 1122.52 px | 793.69 × 1122.52 |
+| Content box (178mm) | 672.76 | 672.75 |
+| Element at x=150mm in a 16mm margin | 627.40 | 627.39 |
+| Landscape @ 50% | 561.26 × 396.85 | 561.26 × 396.84 |
+
+Sub-pixel agreement, which is the WYSIWYG guarantee the phase rests on.
+
+**E2 as built.** No library. `interact.js` and `moveable` were both
+sanctioned, but the geometry is ~170 lines and a library would have to be
+told about the zoom transform anyway; doing it directly keeps the scale
+maths explicit and in one place. `canvasGeometry.js` is pure and
+unit-tested — the component only converts a pixel delta to millimetres
+(dividing by zoom once) and hands it over, so nothing downstream can be
+wrong about the scale because nothing downstream sees pixels.
+
+Driven in Chromium, measured rather than eyeballed:
+
+| Gesture | Result |
+|---|---|
+| drag +20mm, +10mm (Alt suspends snapping) | dx 20.00mm, dy 10.00mm |
+| released 0.8mm short of a neighbour's edge | snapped to exactly 0.000mm |
+| resize east −20mm | 110 → 90mm, **left edge moved 0.000mm** |
+| undo | back to 110mm in one step |
+| arrow / shift-arrow | 5mm / 1mm |
+| multi-select group drag | 2 selected, both moved 10.0mm |
+
+History snapshots at the *start* of a gesture, so a drag is one undo step
+rather than a frame-by-frame replay.
+
+**A bug worth recording:** the resize handles rendered, reported bounding
+boxes, and were silently unclickable — `.canvas-el` had `overflow: hidden`,
+which clips a half-outside handle out of hit-testing as well as out of
+paint. A check that asserted "eight handles exist" would have passed while
+resize was dead. Only driving the gesture and measuring the width caught
+it.
+
+**The template API as built.** `GET/POST /api/document-templates`,
+`GET/PUT/DELETE /api/document-templates/<id>`, plus `/versions` and
+`/publish`. A save replaces the tree **wholesale** rather than diffing it:
+the canvas edits template, bands and elements at once, and per-element
+CRUD would turn one drag into three round trips and make the canvas
+responsible for keeping an id map in sync. Row ids are therefore not
+stable across a save, so the response returns what was written and the
+canvas adopts that. Validation reuses `renderers.layout.validate`, so the
+API refuses exactly the trees the renderer refuses — storing a template
+that cannot be drawn only moves the failure to whoever opens the PDF.
+
+A published template is immutable (409 on edit); `/versions` clones it at
+version *n+1*, because packs already rendered from it.
+
+**E3 as built.** The properties pane offers **only what the renderer
+honours**, which turned out to be a bigger constraint than it sounds:
+`style_token` was stored, validated and carried all the way through the
+layout tree, and then *silently ignored* — a template could say
+`heading-1` and the PDF would draw body text. E3 closed that.
+
+`schema_v2/styling.py` is now the closed vocabulary — ten typographic
+tokens plus `align`, `valign`, `color`, `border`, `fill` — shared by the
+schema's validation, the print stylesheet and the canvas inspector.
+`elementStyles.js` mirrors it on the frontend and a test reads the Python
+file to assert the two lists match.
+
+**Every value is a NAME, never a literal.** `color: 'accent'`, not
+`#eb6834`. A colour picker would be friendlier and would pin a hex into a
+template that then keeps drawing the old brand after a rebrand — and would
+hand Phase G's PPTX renderer CSS to interpret. The brand kit decides what
+`accent` looks like.
+
+Two more faults the phase surfaced, both silent:
+
+- **`var(--ink)` does not exist** — the token is `--ink-primary`. A whole
+  block of new canvas styling was inert while the build, the lint and
+  every test passed; only reading the computed `border-bottom-width` in a
+  real browser showed it. `styles.test.js` now asserts every custom
+  property referenced anywhere is defined somewhere (including the ones
+  set inline from JS).
+- **`CHART_KINDS` carried `column`,** which nothing can draw, and omitted
+  `bar_comparison`, which something can — a dropdown entry producing a
+  blank box, and a capability nobody could reach. A test now asserts the
+  list equals `renderers.charts.KINDS` exactly.
+
+**E4 as built.** `GET /api/bindings` serves the whole catalogue — system
+values, datasets with their fields, display specs — and the inspector
+binds an element to one of them. The canvas then draws **what that binding
+would actually show**, so an author lays out against the real string
+length rather than against the word "bound".
+
+Which kinds a type can take is constrained: a table or chart reads a whole
+result set, a field reads one value, a rule reads nothing. Switching kind
+goes through one `bindingPatch()` that sets the kind's own column and
+clears the others — the schema refuses an element carrying two, and the
+canvas should never be able to build one.
+
+**A sample says whether it is real.** Where the dataset cache holds rows
+the sample is a real value; where it does not, it is derived from the
+field's data type and is drawn differently and labelled "example". That
+distinction is the point of the phase: an author who sizes a column
+against a made-up number lays the page out twice, and one who is not told
+it is made up may never lay it out again. The fallback is per field, not
+per dataset — a null in row one means the column is sparse, not that the
+dataset is uncached.
+
+**The picker had nothing to pick.** Nothing outside the tests had ever
+created a v2 `Dataset`, so the field picker was correct and empty, which is
+indistinguishable from broken. `seed_v2_semantic.py` projects what
+`seed_demo` loads (`Holding`, `PerformanceSnapshot`) into the v2 shapes
+with the field metadata written out properly — a label rather than a column
+name, a data type, an aggregation, an alignment — which is what lets the
+picker say "Market value, currency, right-aligned, sample 16,500,000"
+instead of "MKT_VAL". It is a projection, not a migration: the v1 tables
+remain what the app serves from.
+
+Also closed: a binding that carried two columns hit the database's check
+constraint and surfaced as a 500. `binding_problems()` now reports it as a
+400 that names the offending column.
+
+**Verification:** rebuild the seeded Pzena factsheet from scratch on the
+canvas, with no code, and render it.
+
+---
+
+### F · Snapshot freezing · ~3–4 days
+
+**Goal:** close a defect that is live today.
+
+`Report.file_path` holds a frozen PDF, but `routes/reports.py`'s export and
+preview paths call `resolve_report_content()` again, live. After any upstream
+restatement the PDF a client holds and the preview beside it disagree, and
+nothing says so.
+
+- Freeze the resolved payload into `ReportSnapshot` at approval, with a
+  content hash
+- Bind every `DataLoad` it drew on via `ReportDataBinding`
+- Check `DataLoad.is_publishable` across the whole bound set before freezing
+- All formats render from the snapshot thereafter
+- A reissue is a new `version`, never an overwrite
+
+**Independent of everything else** — could run in parallel from day one.
+
+---
+
+### G · PPTX as a second renderer · ~1–1.5 weeks
+
+**Goal:** deck-shaped output, where clients want the editable file.
+
+Proven working in this environment: branded `.pptx` → `python-pptx` injection
+→ LibreOffice headless → PDF. Designer's fonts, colours and positions
+preserved; table rows cloned with their formatting; native charts re-pointed
+via `replace_data()` keeping series colours and legend.
+
+**Two things found in testing that must be designed around:**
+
+1. PowerPoint has **no flow layout**. An expanded table silently covered a
+   text box beneath it — verified by z-order.
+2. **The engine cannot know rendered height.** `python-pptx` reports the
+   *authored* height (1.00") regardless of row count. Only the renderer knows
+   the truth. Overflow detection therefore needs a probe render, or fixed
+   whitespace budgets with a hard row cap.
+
+Scope this to `pitchbook` / `meeting_pack` / `marketing` report types only.
+Factsheets and statements stay on the HTML path, which has flow layout.
+
+Confirmed in scope, so Phase D's element model must stay renderer-agnostic
+from the start — retrofitting that later means rewriting every template.
+
+Requires `libreoffice-impress` in the container — **not** installed by
+default; `libreoffice-core` alone has no PPTX filter.
+
+---
+
+### H · Content retrieval for marketing · ~1–1.5 weeks · NEW
+
+**Goal:** serve the persona the rest of this plan does not.
+
+Marketing sets the guidelines and then **comes to the system to retrieve
+content** — the latest approved factsheet for a fund, a sector chart to drop
+into a pitch deck, an approved commentary paragraph to reuse. None of that is
+template authoring, and none of it exists today.
+
+- A content library over distributed reports and their frozen
+  `ReportSnapshot`s: browse by fund / strategy / client / period, filtered to
+  **approved and current only**
+- Download a document in any registered format, or export a single component
+  — a chart as SVG/PNG, a table as XLSX — without opening the report
+- Reusable text blocks (commentary, disclosures) with their approval state
+  visible, so nobody pastes a superseded paragraph into a new deck
+- A "what changed" view: which packs moved since a given date
+
+This is much of what Seismic actually sells, and it is closer to revenue than
+the canvas is. It depends only on Phase F (snapshot freezing), not on the
+canvas — so it can run in parallel with D and E.
+
+---
+
+## Evidence already gathered
+
+Everything below was run in this repo's environment, not assumed.
+
+| Claim | Evidence |
+|---|---|
+| WeasyPrint does real paged media | 3-page render with running header + footer, `Page 1 of 3`, forced break, table header repeating on page 2, full Unicode (Ørsted, em-dash, curly quotes), absolute positioning |
+| Existing chart components are print-ready | `BarChart`/`CompositionBar` have 0 SVG elements (pure CSS); `AreaChart`/`DonutChart` are static SVG. All rendered in a WeasyPrint PDF at 150dpi |
+| Vega-Lite renders server-side with no Node | `vl-convert-python`, 20KB SVG, computed axes/scale/legend |
+| `color-mix()` fails silently in WeasyPrint | Isolated probe: hex ✓, gradient ✓, color-mix ✗ (renders nothing) |
+| PPTX template injection works | Branded template → filled deck → PDF, with styling, cloned table rows and native chart preserved |
+| PowerPoint has no flow layout | Expanded table covered the commentary box; z-order and declared-vs-rendered height confirmed |
+
+---
+
+## Risks
+
+| Risk | Mitigation |
+|---|---|
+| Print CSS regressions are invisible until a client sees them | Golden-render tests (Phase B) are non-negotiable, not nice-to-have |
+| Canvas scope creep — a layout designer is a genuinely large surface | E1–E6 ship in order; E1–E3 alone already beat today's editor |
+| WeasyPrint CSS gaps beyond `color-mix` | Build a support-matrix fixture page early in Phase B and render it; find the gaps before the templates do |
+| Brand fonts unlicensed for server embedding | Check licences before Phase C; `BrandKit.font_asset_uris` exists to hold them |
+| Two renderers (HTML + PPTX) drift | They share the resolved payload and the brand kit; only chrome differs. Golden tests on both. |
+
+---
+
+## Open decisions
+
+All three opening questions are now answered and folded into the phases
+above. What remains open:
+
+1. **Does marketing need to edit the approved block catalogue themselves, or
+   does ops curate it on their behalf?** Changes whether Phase H ships a
+   governance UI or just a read surface.
+2. **Which brand fonts, and are they licensed for server-side embedding?**
+   Blocks Phase C. `BrandKit.font_asset_uris` exists to hold them, but the
+   licence question is commercial, not technical.
+3. **What is the real page-count ceiling for a pack?** Drives whether
+   rendering is synchronous or goes to a job queue. A 4-page factsheet is
+   sub-second; a 200-page consolidated statement is not.
+
+---
+
+## Suggested order of attack
+
+**A → B → F in parallel → C → D → E**, with H alongside D/E once F lands, and
+G after E1–E3 prove the canvas direction.
+
+Phase A alone makes every existing document markedly better and takes about a
+week. It is the highest ratio of visible improvement to risk in the whole
+plan, and it needs no decisions from the list above.

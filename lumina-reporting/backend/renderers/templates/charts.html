@@ -1,0 +1,171 @@
+{#
+  Chart markup for print.
+
+  Ports of the app's BarChart / CompositionBar / DonutChart, with the
+  hover layer removed and everything it carried promoted onto the page:
+  a legend for two or more series, a direct value label on every mark.
+  That is not politeness -- three palette hues sit below 3:1 against
+  paper, and visible labels are what makes them legal.
+
+  Every colour reaching these macros is already a literal hex resolved in
+  Python. Nothing here may use color-mix() or aspect-ratio; the print-CSS
+  lint fails the build if it does.
+#}
+
+{% macro legend(entries) %}
+  {% if entries %}
+    <div class="chart-legend">
+      {% for entry in entries %}
+        <span class="chart-legend-item">
+          <span class="chart-swatch" style="background: {{ entry.color }}"></span>
+          {{ entry.label }}{% if entry.value_label %} · {{ entry.value_label }}{% endif %}
+        </span>
+      {% endfor %}
+    </div>
+  {% endif %}
+{% endmacro %}
+
+{% macro bar_chart(chart) %}
+  <div class="chart">
+    {% for row in chart.rows %}
+      <div class="chart-row">
+        <span class="chart-label">{{ row.label }}</span>
+        <div class="chart-bars">
+          {% for bar in row.bars %}
+            {% if chart.signed %}
+              {# Diverging: zero down the middle, bars growing away from it.
+                 A negative drawn as a positive-length bar is a false chart. #}
+              <div class="chart-bar-line chart-bar-signed">
+                <span class="chart-side chart-side-neg">
+                  {% if bar.negative %}
+                    <span class="chart-value">{{ bar.value_label }}</span>
+                    <span class="chart-bar" style="width: {{ '%.1f' | format(bar.pct) }}%; background: {{ bar.color }}"></span>
+                  {% endif %}
+                </span>
+                <span class="chart-side chart-side-pos">
+                  {% if not bar.negative %}
+                    <span class="chart-bar" style="width: {{ '%.1f' | format(bar.pct) }}%; background: {{ bar.color }}"></span>
+                    <span class="chart-value">{{ bar.value_label }}</span>
+                  {% endif %}
+                </span>
+              </div>
+            {% else %}
+              <div class="chart-bar-line">
+                <span class="chart-bar" style="width: {{ '%.1f' | format(bar.pct) }}%; background: {{ bar.color }}"></span>
+                {# The direct label the screen component puts in a tooltip. #}
+                <span class="chart-value">{{ bar.value_label }}</span>
+              </div>
+            {% endif %}
+          {% endfor %}
+        </div>
+      </div>
+    {% endfor %}
+    {{ legend(chart.legend) }}
+  </div>
+{% endmacro %}
+
+{% macro composition_chart(chart) %}
+  <div class="chart">
+    <div class="chart-track">
+      {% for segment in chart.segments %}
+        {# flex-grow, so the segments always sum to exactly the track width
+           however the percentages round. #}
+        <span class="chart-segment"
+              style="flex-grow: {{ '%.4f' | format(segment.pct) }}; background: {{ segment.color }}"></span>
+      {% endfor %}
+    </div>
+    {{ legend(chart.legend) }}
+  </div>
+{% endmacro %}
+
+{% macro donut_chart(chart) %}
+  <div class="chart chart-donut">
+    <svg viewBox="0 0 {{ chart.box }} {{ chart.box }}" width="34mm" height="34mm" role="img">
+      <g transform="rotate(-90 {{ chart.box // 2 }} {{ chart.box // 2 }})">
+        {% for segment in chart.segments %}
+          <circle cx="{{ chart.box // 2 }}" cy="{{ chart.box // 2 }}" r="{{ chart.radius }}"
+                  fill="none" stroke="{{ segment.color }}" stroke-width="{{ chart.stroke }}"
+                  stroke-dasharray="{{ '%.2f' | format(segment.dash) }} {{ '%.2f' | format(segment.rest) }}"
+                  stroke-dashoffset="{{ '%.2f' | format(segment.offset) }}"></circle>
+        {% endfor %}
+      </g>
+    </svg>
+    <div class="chart-donut-legend">{{ legend(chart.legend) }}</div>
+  </div>
+{% endmacro %}
+
+{% macro vega_chart(chart) %}
+  {# Inlined, not linked: the PDF has to be one self-contained file.
+     vl_convert escapes every data-derived string into SVG text, so a
+     label arriving from a warehouse cannot close the element and inject
+     markup -- pinned by test_vega_charts.py. #}
+  <div class="chart chart-vega">{{ chart.svg | safe }}</div>
+{% endmacro %}
+
+{% macro chart(model) %}
+  {% if model.kind == 'bar' %}{{ bar_chart(model) }}
+  {% elif model.kind == 'composition' %}{{ composition_chart(model) }}
+  {% elif model.kind == 'donut' %}{{ donut_chart(model) }}
+  {% elif model.kind == 'vega' %}{{ vega_chart(model) }}
+  {% endif %}
+{% endmacro %}
+
+
+{#
+  Fixed bands: a declared height with its contents anchored inside it.
+
+  A repeating band pins to the top of the page when it is the FIRST
+  section and to the bottom when it is the LAST. That is the only reading
+  the model supports -- a repeating band in the middle of the flow has no
+  page position to take -- and layout.validate() rejects the other case
+  rather than guessing.
+#}
+{% macro element_box(element) %}style="left: {{ element.x_mm }}mm; top: {{ element.y_mm }}mm; width: {{ element.w_mm }}mm; height: {{ element.h_mm }}mm; z-index: {{ element.z_index }}"{% endmacro %}
+
+{% macro element_body(element, theme) %}
+  {%- set bound = element.content %}
+  {%- if element.element_type == 'page_number' %}
+    {# Resolved by the engine, never in Python: the page count is not
+       known until pagination has run. A band that repeats cannot carry
+       this -- see the note in report.html. #}
+    <span class="el-page-number"></span>
+  {%- elif element.element_type in ('text', 'field') %}
+    {{ bound.value if bound and bound.value is defined else (element.static_text or '') }}
+  {%- elif element.element_type == 'image' %}
+    {% if element.options and element.options.src %}<img src="{{ element.options.src }}" alt="">{% endif %}
+  {%- elif element.element_type == 'line' %}
+    <span class="el-rule" style="background: {{ theme.rule }}"></span>
+  {%- elif element.element_type == 'box' %}
+    <span class="el-fill"></span>
+  {%- elif element.element_type == 'table' and bound %}
+    <table>
+      <thead><tr>{% for column in bound.columns %}<th>{{ column }}</th>{% endfor %}</tr></thead>
+      <tbody>
+        {% for row in bound.rows %}
+          <tr class="{{ 'is-subtotal' if row.__subtotal__ or row.__remainder__ }}">
+            {% for column in bound.columns %}<td>{{ row[column] if row[column] is not none else '' }}</td>{% endfor %}
+          </tr>
+        {% endfor %}
+        {% if bound.totals %}
+          <tr class="is-total">
+            {% for column in bound.columns %}<td>{{ bound.totals[column] if bound.totals[column] is not none else '' }}</td>{% endfor %}
+          </tr>
+        {% endif %}
+      </tbody>
+    </table>
+  {%- elif element.element_type == 'chart' and bound %}
+    {{ chart(bound) }}
+  {%- endif %}
+{% endmacro %}
+
+{% macro fixed_band(section, theme) %}
+  <div class="band band-fixed{{ ' band-' + section.pin if section.pin }}"
+       style="height: {{ section.height_mm }}mm">
+    {% for element in section.elements %}
+      <div class="el el-{{ element.element_type }} {{ element | style_classes }}"
+           {{ element_box(element) }}>
+        {{- element_body(element, theme) -}}
+      </div>
+    {% endfor %}
+  </div>
+{% endmacro %}
