@@ -8,7 +8,7 @@ const BarChart = ({ data, title, unitLabel = 'reports' }) => {
   const maxValue = Math.max(1, ...data.map(row => row.value));
 
   return (
-    <div className="bar-chart" role="img" aria-label={`${title}: ${data.map(row => `${row.label} ${row.value}`).join(', ')}`}>
+    <div className="bar-chart" role="img" aria-label={`${title}: ${data.map(row => `${row.label} ${row.valueLabel ?? row.value}`).join(', ')}`}>
       {data.map((row, index) => {
         const pct = row.value > 0 ? Math.max((row.value / maxValue) * 100, 2) : 0;
         return (
@@ -31,7 +31,9 @@ const BarChart = ({ data, title, unitLabel = 'reports' }) => {
                 </div>
               )}
             </div>
-            <span className="bar-chart-value">{row.value}</span>
+            {/* valueLabel lets a caller carry a unit into the tip label
+                ("42.7h"); without one the bare number is the label, as before. */}
+            <span className="bar-chart-value">{row.valueLabel ?? row.value}</span>
           </div>
         );
       })}

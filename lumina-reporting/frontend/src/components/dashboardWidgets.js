@@ -159,31 +159,10 @@ const RecentReportsWidget = ({ dashboard }) => (
   </ul>
 );
 
-const DataSourceHealthWidget = ({ dashboard }) => {
-  const failed = dashboard.failedDataSources || [];
-  if (failed.length === 0) return <p className="panel-subtitle">All connected data sources are syncing cleanly.</p>;
-  return (
-    <ul className="report-list">
-      {failed.map(source => (
-        <li key={source.id}>
-          <strong>{source.name}</strong> — {source.message || 'Sync failed'}
-        </li>
-      ))}
-    </ul>
-  );
-};
-
-// Illustrative -- ReportTransition has real timestamps to compute this
-// properly, cut for time this pass; a documented real-data upgrade path.
-const DemoSlaTurnaroundWidget = () => (
-  <div className="widget-demo-stat">
-    <strong>6.4 days</strong>
-    <span className="panel-subtitle">Avg. time from Draft to Distributed, last quarter</span>
-  </div>
-);
-
-// Illustrative -- DistributionLink has no view/open-tracking column at all,
-// so this can't be real without a schema change.
+// Still illustrative -- DistributionLink has no view/open-tracking column at
+// all, so this one can't be real without a schema change. The turnaround and
+// deadline widgets that used to sit beside it are now real: Report.due_date
+// exists, and the Management tab computes turnaround from ReportTransition.
 const DemoClientEngagementWidget = () => (
   <div className="widget-demo-stat">
     <strong>68%</strong>
@@ -191,78 +170,300 @@ const DemoClientEngagementWidget = () => (
   </div>
 );
 
-// Illustrative -- no due_date/deadline field exists anywhere on Report or Client.
-const DemoUpcomingDeadlinesWidget = () => (
-  <ul className="report-list">
-    <li><strong>Q3 Factsheet refresh</strong> — due in 6 days</li>
-    <li><strong>Annual ADV update</strong> — due in 19 days</li>
-    <li><strong>Meridian Pension quarterly review</strong> — due in 27 days</li>
-  </ul>
-);
+const UpcomingDeadlinesWidget = ({ dashboard }) => {
+  const deadlines = dashboard.upcomingDeadlines || [];
+  if (deadlines.length === 0) return <p className="panel-subtitle">No open report has a due date set.</p>;
+  return (
+    <ul className="report-list">
+      {deadlines.map(row => (
+        <li key={row.reportId}>
+          <Link to={`/reports/${row.reportId}`}>{row.title}</Link>{' '}
+          <span className={row.daysRemaining < 0 ? 'deadline-overdue' : 'panel-subtitle'}>
+            {/* Past due reads as past due, not as "in -3 days". */}
+            {row.daysRemaining < 0
+              ? `${Math.abs(row.daysRemaining)} ${Math.abs(row.daysRemaining) === 1 ? 'day' : 'days'} overdue`
+              : row.daysRemaining === 0 ? 'due today'
+              : `due in ${row.daysRemaining} ${row.daysRemaining === 1 ? 'day' : 'days'}`}
+          </span>
+        </li>
+      ))}
+    </ul>
+  );
+};
+
+// ---------- Production Hub: real-data widgets ----------
+
+const SLA_TONES = {
+  sla_breached: { label: 'Breached', color: 'var(--c-critical)' },
+  flagged: { label: 'Flagged', color: 'var(--c-review)' },
+  watch: { label: 'Watch', color: 'var(--c-compliance)' },
+  on_track: { label: 'On track', color: 'var(--c-approved)' },
+};
+
+const DataSourceHealthListWidget = ({ dashboard }) => {
+  const sources = dashboard.dataSources || [];
+  if (sources.length === 0) return <p className="panel-subtitle">No data sources connected yet.</p>;
+  return (
+    <ul className="health-list">
+      {sources.map(source => (
+        <li key={source.id}>
+          <span className={`health-dot health-${source.status}`} aria-hidden="true" />
+          <span className="health-name">{source.name}</span>
+          <span className="health-detail">
+            {/* A source that has never run is its own state, not a healthy
+                one -- saying "never synced" is the whole point of listing it. */}
+            {source.status === 'error' ? (source.message || 'Sync failed')
+              : source.status === 'never' ? 'Never synced'
+              : source.lastSyncedAt ? `Synced ${new Date(source.lastSyncedAt).toLocaleDateString()}` : 'Synced'}
+          </span>
+        </li>
+      ))}
+    </ul>
+  );
+};
+
+const WorkflowStageProgressWidget = ({ dashboard }) => {
+  const stages = dashboard.workflowStageProgress || [];
+  if (stages.length === 0) return <p className="panel-subtitle">Nothing is currently in flight.</p>;
+  return (
+    <>
+      <p className="panel-subtitle">
+        Reports sitting on each workflow step right now. A report on a parallel branch counts on every step it occupies.
+      </p>
+      <BarChart title="By stage" data={toCategoricalData(stages)} />
+    </>
+  );
+};
+
+const MissingContentWidget = ({ dashboard }) => {
+  const gaps = dashboard.missingContent || [];
+  if (gaps.length === 0) return <p className="panel-subtitle">Every in-flight report has its reviewable content signed off.</p>;
+  return (
+    <ul className="report-list">
+      {gaps.slice(0, 8).map(gap => (
+        <li key={`${gap.reportId}-${gap.componentId}`}>
+          <Link to={`/reports/${gap.reportId}`}>{gap.reportTitle}</Link> — {gap.componentLabel}
+        </li>
+      ))}
+      {gaps.length > 8 && <li className="panel-subtitle">+{gaps.length - 8} more</li>}
+    </ul>
+  );
+};
+
+const DeliverySlaWidget = ({ dashboard }) => {
+  const counts = dashboard.deliverySla || {};
+  const data = Object.entries(SLA_TONES)
+    .map(([key, tone]) => ({ label: tone.label, value: counts[key] || 0, color: tone.color }));
+  if (data.every(row => row.value === 0)) return <p className="panel-subtitle">No clients to score yet.</p>;
+  return (
+    <>
+      <p className="panel-subtitle">Every client's computed delivery status — the same one the Internal Portal badges.</p>
+      <CompositionBar title="Delivery SLA" data={data} unitLabel="clients" />
+    </>
+  );
+};
+
+const SlaAtRiskWidget = ({ dashboard }) => {
+  const atRisk = dashboard.slaAtRisk || {};
+  const breached = atRisk.breached ?? 0;
+  return (
+    <>
+      <StatTile value={breached} icon={IconShield} accent={breached > 0 ? 'var(--c-critical)' : 'var(--c-approved)'} />
+      <span className="panel-subtitle">
+        {atRisk.approaching ?? 0} more due within {atRisk.windowDays ?? 3} days
+      </span>
+    </>
+  );
+};
+
+// ---------- Management tab ----------
+
+// Management data arrives from its own endpoint, so every widget here has to
+// render something sane before it lands rather than assuming a shape.
+const SlowestStepsWidget = ({ management }) => {
+  const steps = management?.slowestSteps;
+  if (!management) return <p className="panel-subtitle">Loading…</p>;
+  if (!steps || steps.length === 0) {
+    return (
+      <p className="panel-subtitle">
+        Not enough completed steps yet — a step needs at least {management.minVisitsForAverage ?? 2} finished
+        visits before an average means anything.
+      </p>
+    );
+  }
+  return (
+    <>
+      <p className="panel-subtitle">Average <strong>hours</strong> per completed visit. Wall-clock, so it includes nights and weekends.</p>
+      <BarChart
+        title="Slowest steps" unitLabel="hours"
+        data={steps.map((step, index) => ({
+          label: step.label, value: step.avgHours, valueLabel: `${step.avgHours}h`,
+          color: CATEGORICAL_COLORS[index % CATEGORICAL_COLORS.length],
+        }))}
+      />
+    </>
+  );
+};
+
+const BottleneckByGroupWidget = ({ management }) => {
+  if (!management) return <p className="panel-subtitle">Loading…</p>;
+  const rows = management.bottleneckByGroup || [];
+  if (rows.length === 0) return <p className="panel-subtitle">No work is queued on any group right now.</p>;
+  return (
+    <table className="scorecard-table">
+      <thead><tr><th>Group</th><th>Waiting</th><th>Oldest</th></tr></thead>
+      <tbody>
+        {rows.map(row => (
+          <tr key={row.label}>
+            <td>{row.label}</td>
+            <td>{row.count}</td>
+            <td>{row.oldestDays} {row.oldestDays === 1 ? 'day' : 'days'}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+};
+
+const TeamScorecardWidget = ({ management }) => {
+  if (!management) return <p className="panel-subtitle">Loading…</p>;
+  const rows = management.teamScorecard || [];
+  if (rows.length === 0) return <p className="panel-subtitle">No reports to score yet.</p>;
+  return (
+    <table className="scorecard-table">
+      <thead><tr><th>Team</th><th>Open</th><th>Delivered</th><th>Avg. turnaround</th></tr></thead>
+      <tbody>
+        {rows.map(row => (
+          <tr key={row.label}>
+            <td>{row.label}</td>
+            <td>{row.open}</td>
+            <td>{row.delivered}</td>
+            {/* An em dash, not a zero: a team that hasn't delivered yet has
+                no turnaround, which is not the same as a fast one. */}
+            <td>{row.avgTurnaroundDays == null ? '—' : `${row.avgTurnaroundDays} days`}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+};
+
+// Every widget declares which tab it belongs to. Day-to-day answers "what
+// do I work on now"; Management answers "how is production performing" --
+// the same split the design draws, and the reason the Management widgets
+// read from their own payload (see MANAGEMENT_WIDGET_IDS below).
+export const TABS = [
+  { key: 'dayToDay', label: 'Day-to-day' },
+  { key: 'management', label: 'Management' },
+];
 
 export const WIDGET_LIBRARY = [
-  { id: 'metric-pending-approvals', title: 'Pending approvals', size: 'sm', roles: ['admin', 'editor'], demo: false,
+  { id: 'metric-pending-approvals', title: 'Pending approvals', tab: 'dayToDay', size: 'sm', roles: ['admin', 'editor'], demo: false,
     render: (dashboard) => <StatTile value={dashboard.pendingApprovals ?? 0} icon={IconClipboard} accent="var(--c-review)" /> },
-  { id: 'metric-pending-compliance', title: 'Pending compliance', size: 'sm', roles: ['admin', 'editor'], demo: false,
+  { id: 'metric-pending-compliance', title: 'Pending compliance', tab: 'dayToDay', size: 'sm', roles: ['admin', 'editor'], demo: false,
     render: (dashboard) => <StatTile value={dashboard.pendingCompliance ?? 0} icon={IconShield} accent="var(--c-compliance)" /> },
-  { id: 'metric-total-reports', title: 'Total reports', size: 'sm', roles: ['admin', 'editor', 'viewer'], demo: false,
+  { id: 'metric-total-reports', title: 'Total reports', tab: 'dayToDay', size: 'sm', roles: ['admin', 'editor', 'viewer'], demo: false,
     render: (dashboard) => (
       <StatTile value={dashboard.totalReports ?? 0} icon={IconDocument} accent="var(--cat-1)" delta={weekOverWeekDelta(dashboard.reportsByWeek)} />
     ) },
-  { id: 'metric-distributed', title: 'Distributed to clients', size: 'sm', roles: ['admin', 'editor', 'viewer'], demo: false,
+  { id: 'metric-distributed', title: 'Distributed to clients', tab: 'dayToDay', size: 'sm', roles: ['admin', 'editor', 'viewer'], demo: false,
     render: (dashboard) => <StatTile value={dashboard.reportsByStatus?.distributed ?? 0} icon={IconUsers} accent="var(--c-approved)" /> },
-  { id: 'pending-component-reviews', title: 'Components awaiting review', size: 'sm', roles: ['admin', 'editor'], demo: false,
+  { id: 'metric-sla-at-risk', title: 'SLA at risk', tab: 'dayToDay', size: 'sm', roles: ['admin', 'editor'], demo: false,
+    render: (dashboard) => <SlaAtRiskWidget dashboard={dashboard} /> },
+  { id: 'pending-component-reviews', title: 'Components awaiting review', tab: 'dayToDay', size: 'sm', roles: ['admin', 'editor'], demo: false,
     render: (dashboard) => <StatTile value={dashboard.pendingComponentReviews ?? 0} icon={IconSearch} accent="var(--cat-5)" /> },
-  { id: 'chart-status-pipeline', title: 'Report volume', size: 'lg', roles: ['admin', 'editor', 'viewer'], demo: false,
+  { id: 'chart-status-pipeline', title: 'Report volume', tab: 'dayToDay', size: 'lg', roles: ['admin', 'editor', 'viewer'], demo: false,
     render: (dashboard) => <ReportVolumeWidget dashboard={dashboard} /> },
-  { id: 'chart-by-team', title: 'Report volume by team', size: 'md', roles: ['admin', 'editor'], demo: false,
+  { id: 'chart-workflow-stages', title: 'Where work is sitting', tab: 'dayToDay', size: 'md', roles: ['admin', 'editor'], demo: false,
+    render: (dashboard) => <WorkflowStageProgressWidget dashboard={dashboard} /> },
+  { id: 'delivery-sla', title: 'Delivery SLA', tab: 'dayToDay', size: 'md', roles: ['admin', 'editor'], demo: false,
+    render: (dashboard) => <DeliverySlaWidget dashboard={dashboard} /> },
+  { id: 'chart-by-team', title: 'Report volume by team', tab: 'dayToDay', size: 'md', roles: ['admin', 'editor'], demo: false,
     render: (dashboard) => <BarChart title="By team" data={toCategoricalData(dashboard.reportsByTeam)} /> },
-  { id: 'chart-by-asset-class', title: 'Report volume by asset class', size: 'md', roles: ['admin', 'viewer'], demo: false,
+  { id: 'chart-by-asset-class', title: 'Report volume by asset class', tab: 'dayToDay', size: 'md', roles: ['admin', 'viewer'], demo: false,
     render: (dashboard) => <DonutChart title="By asset class" centerLabel="Reports" data={toCategoricalData(dashboard.reportsByAssetClass)} /> },
-  { id: 'chart-by-client', title: 'Report volume by client', size: 'md', roles: ['admin', 'editor'], demo: false,
+  { id: 'chart-by-client', title: 'Report volume by client', tab: 'dayToDay', size: 'md', roles: ['admin', 'editor'], demo: false,
     render: (dashboard) => <BarChart title="By client" data={toCategoricalData(dashboard.reportsByClient)} /> },
-  { id: 'chart-weekly-volume', title: 'Weekly report volume', size: 'md', roles: ['admin', 'editor'], demo: false,
+  { id: 'chart-weekly-volume', title: 'Weekly report volume', tab: 'dayToDay', size: 'md', roles: ['admin', 'editor'], demo: false,
     render: (dashboard) => <AreaChart title="Last 8 weeks" data={toWeeklyData(dashboard.reportsByWeek)} /> },
-  { id: 'recent-reports', title: 'Recent reports', size: 'md', roles: ['admin', 'editor', 'viewer'], demo: false,
+  { id: 'recent-reports', title: 'Recent reports', tab: 'dayToDay', size: 'md', roles: ['admin', 'editor', 'viewer'], demo: false,
     render: (dashboard) => <RecentReportsWidget dashboard={dashboard} /> },
+  { id: 'upcoming-deadlines', title: 'Upcoming deadlines', tab: 'dayToDay', size: 'md', roles: ['admin', 'editor'], demo: false,
+    render: (dashboard) => <UpcomingDeadlinesWidget dashboard={dashboard} /> },
+  { id: 'missing-content', title: 'Missing content', tab: 'dayToDay', size: 'md', roles: ['admin', 'editor'], demo: false,
+    render: (dashboard) => <MissingContentWidget dashboard={dashboard} /> },
   // 'sm' is the stat-tile width (a quarter row). These two are list/button
   // panels whose content needs a half row to breathe -- at 'sm' they left a
   // dead gutter beside every chart they sat next to.
-  { id: 'data-source-health', title: 'Data source health', size: 'md', roles: ['admin', 'editor'], demo: false,
-    render: (dashboard) => <DataSourceHealthWidget dashboard={dashboard} /> },
-  { id: 'quick-actions', title: 'Quick actions', size: 'md', roles: ['admin', 'editor'], demo: false,
+  { id: 'data-source-health', title: 'Data source health', tab: 'dayToDay', size: 'md', roles: ['admin', 'editor'], demo: false,
+    render: (dashboard) => <DataSourceHealthListWidget dashboard={dashboard} /> },
+  { id: 'quick-actions', title: 'Quick actions', tab: 'dayToDay', size: 'md', roles: ['admin', 'editor'], demo: false,
     render: (dashboard, role) => <QuickActionsWidget dashboard={dashboard} role={role} /> },
-  { id: 'demo-sla-turnaround', title: 'Avg. turnaround time', size: 'md', roles: ['admin', 'editor'], demo: true,
-    render: () => <DemoSlaTurnaroundWidget /> },
-  { id: 'demo-client-engagement', title: 'Client portal engagement', size: 'md', roles: ['admin', 'editor'], demo: true,
+  { id: 'demo-client-engagement', title: 'Client portal engagement', tab: 'dayToDay', size: 'md', roles: ['admin', 'editor'], demo: true,
     render: () => <DemoClientEngagementWidget /> },
-  { id: 'demo-upcoming-deadlines', title: 'Upcoming deadlines', size: 'md', roles: ['admin', 'editor'], demo: true,
-    render: () => <DemoUpcomingDeadlinesWidget /> },
+
+  // Management tab. These read `management`, the second payload.
+  { id: 'mgmt-team-scorecard', title: 'Team scorecard', tab: 'management', size: 'lg', roles: ['admin', 'editor', 'viewer'], demo: false,
+    render: (dashboard, role, management) => <TeamScorecardWidget management={management} /> },
+  { id: 'mgmt-slowest-steps', title: 'Slowest steps', tab: 'management', size: 'md', roles: ['admin', 'editor', 'viewer'], demo: false,
+    render: (dashboard, role, management) => <SlowestStepsWidget management={management} /> },
+  { id: 'mgmt-bottleneck-by-group', title: 'Bottlenecks by group', tab: 'management', size: 'md', roles: ['admin', 'editor', 'viewer'], demo: false,
+    render: (dashboard, role, management) => <BottleneckByGroupWidget management={management} /> },
+  { id: 'mgmt-production-by-team', title: 'Production by team', tab: 'management', size: 'md', roles: ['admin', 'editor', 'viewer'], demo: false,
+    render: (dashboard) => <BarChart title="By team" data={toCategoricalData(dashboard.reportsByTeam)} /> },
+  { id: 'mgmt-weekly-volume', title: 'Weekly report volume', tab: 'management', size: 'md', roles: ['admin', 'editor', 'viewer'], demo: false,
+    render: (dashboard) => <AreaChart title="Last 8 weeks" data={toWeeklyData(dashboard.reportsByWeek)} /> },
 ];
 
 export const WIDGETS_BY_ID = Object.fromEntries(WIDGET_LIBRARY.map(widget => [widget.id, widget]));
+
+// Which widgets need the Management payload. The Production Hub uses this to
+// decide whether to fetch it at all, so a user who never opens that tab
+// never pays for its queries.
+export const MANAGEMENT_WIDGET_IDS = new Set(
+  WIDGET_LIBRARY.filter(widget => widget.tab === 'management').map(widget => widget.id),
+);
 
 // Ordered so each row tiles completely against the 12-column grid: four
 // quarter-width stat tiles, then a full-width chart, then half-width pairs.
 // A layout that leaves a half row empty reads as a broken grid, not as
 // breathing room.
 export const DEFAULT_LAYOUT = {
-  admin: [
-    'metric-pending-approvals', 'metric-pending-compliance', 'metric-total-reports', 'metric-distributed',
-    'chart-status-pipeline', 'quick-actions', 'chart-by-team', 'recent-reports', 'data-source-health',
-  ],
-  editor: [
-    'metric-pending-approvals', 'metric-total-reports', 'metric-distributed', 'pending-component-reviews',
-    'chart-status-pipeline', 'quick-actions', 'chart-by-client', 'recent-reports', 'data-source-health',
-  ],
-  // A viewer can only see five widgets, which is 2.5 rows' worth -- one row
-  // is unavoidably partial. Ordered so the two stat tiles share a full row
-  // with a half-width chart and the partial row falls last, where a gap is
-  // least conspicuous, rather than first.
-  viewer: [
-    'metric-total-reports', 'metric-distributed', 'chart-by-asset-class',
-    'chart-status-pipeline', 'recent-reports',
-  ],
+  dayToDay: {
+    admin: [
+      'metric-pending-approvals', 'metric-pending-compliance', 'metric-sla-at-risk', 'metric-distributed',
+      'chart-status-pipeline',
+      'quick-actions', 'chart-workflow-stages',
+      'upcoming-deadlines', 'data-source-health',
+      'delivery-sla', 'missing-content',
+    ],
+    editor: [
+      'metric-pending-approvals', 'metric-total-reports', 'metric-sla-at-risk', 'pending-component-reviews',
+      'chart-status-pipeline',
+      'quick-actions', 'chart-workflow-stages',
+      'upcoming-deadlines', 'missing-content',
+      'recent-reports', 'data-source-health',
+    ],
+    // A viewer can only see five widgets, which is 2.5 rows' worth -- one row
+    // is unavoidably partial. Ordered so the two stat tiles share a full row
+    // with a half-width chart and the partial row falls last, where a gap is
+    // least conspicuous, rather than first.
+    viewer: [
+      'metric-total-reports', 'metric-distributed', 'chart-by-asset-class',
+      'chart-status-pipeline', 'recent-reports',
+    ],
+  },
+  management: {
+    admin: ['mgmt-team-scorecard', 'mgmt-slowest-steps', 'mgmt-bottleneck-by-group', 'mgmt-production-by-team', 'mgmt-weekly-volume'],
+    editor: ['mgmt-team-scorecard', 'mgmt-slowest-steps', 'mgmt-bottleneck-by-group', 'mgmt-production-by-team', 'mgmt-weekly-volume'],
+    viewer: ['mgmt-team-scorecard', 'mgmt-production-by-team', 'mgmt-weekly-volume'],
+  },
 };
 
-export const widgetsForRole = (role) => WIDGET_LIBRARY.filter(widget => widget.roles.includes(role));
+export const widgetsForRole = (role, tab = 'dayToDay') =>
+  WIDGET_LIBRARY.filter(widget => widget.tab === tab && widget.roles.includes(role));
+
+export const defaultLayout = (role, tab = 'dayToDay') => {
+  const byRole = DEFAULT_LAYOUT[tab] || DEFAULT_LAYOUT.dayToDay;
+  return byRole[role] || byRole.viewer || [];
+};

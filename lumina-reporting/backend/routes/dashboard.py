@@ -5,6 +5,7 @@ from sqlalchemy import func
 
 from database import db_session
 from models import Client, ComponentReview, DataSource, FundData, Report
+import production_metrics
 from report_content import reviewable_components
 from routes.auth import require_auth
 
@@ -52,30 +53,40 @@ def _reports_by_week(weeks=REPORTS_BY_WEEK_WINDOW):
         result.append({'label': f'W{week}', 'count': counts.get((year, week), 0)})
     return result
 
-def _pending_component_reviews():
-    """Count of reviewable components with no matching ComponentReview row,
-    scoped to reports still in flight (review/compliance) -- same scoping as
-    pendingApprovals/pendingCompliance below, so the number means 'needs
-    action now', not 'ever needed review'. One ReportTemplate fetch per
-    report (via reviewable_components) -- accepted N+1 at demo scale."""
+def _missing_content():
+    """Reviewable components with no matching ComponentReview row, scoped to
+    reports still in flight (review/compliance) -- same scoping as
+    pendingApprovals/pendingCompliance below, so this means 'needs action
+    now', not 'ever needed review'. One ReportTemplate fetch per report (via
+    reviewable_components) -- accepted N+1 at demo scale.
+
+    Returns the gaps themselves rather than just a tally: the count is one
+    len() away, and the Production Hub's list needs to say which report is
+    missing what, not only how many are."""
     in_flight_reports = (
         db_session.query(Report)
         .filter(Report.template_id.isnot(None), Report.status.in_(['review', 'compliance']))
         .all()
     )
     if not in_flight_reports:
-        return 0
+        return []
     reviewed = {
         (row.report_id, row.component_id) for row in
         db_session.query(ComponentReview.report_id, ComponentReview.component_id)
         .filter(ComponentReview.report_id.in_([report.id for report in in_flight_reports]))
         .all()
     }
-    return sum(
-        1 for report in in_flight_reports
+    return [
+        {
+            'reportId': report.id,
+            'reportTitle': report.title,
+            'componentId': component['id'],
+            'componentLabel': component.get('title') or component.get('type') or component['id'],
+        }
+        for report in in_flight_reports
         for component in reviewable_components(report)
         if (report.id, component['id']) not in reviewed
-    )
+    ]
 
 @dashboard_blueprint.get('/api/dashboard')
 @require_auth()
@@ -109,10 +120,27 @@ def get_dashboard():
         .all()
     )
 
-    failed_data_sources = [
-        {'id': source.id, 'name': source.name, 'message': source.last_sync_message}
-        for source in db_session.query(DataSource).filter_by(last_sync_status='error').all()
+    # The whole roster, not only the broken ones: a source that has never
+    # synced is its own kind of problem, and "all green" is only meaningful
+    # if you can see what was checked. failedDataSources stays as its own
+    # key -- the alert banner and several existing callers read it.
+    data_sources = [
+        {
+            'id': source.id,
+            'name': source.name,
+            'type': source.type,
+            'status': source.last_sync_status or 'never',
+            'message': source.last_sync_message,
+            'lastSyncedAt': source.last_synced_at.isoformat() if source.last_synced_at else None,
+        }
+        for source in db_session.query(DataSource).order_by(DataSource.name.asc()).all()
     ]
+    failed_data_sources = [
+        {'id': source['id'], 'name': source['name'], 'message': source['message']}
+        for source in data_sources if source['status'] == 'error'
+    ]
+
+    missing_content = _missing_content()
 
     recent_reports = (
         db_session.query(Report)
@@ -131,5 +159,28 @@ def get_dashboard():
         'failedDataSources': failed_data_sources,
         'recentReports': [{'id': report.id, 'name': report.title} for report in recent_reports],
         'reportsByWeek': _reports_by_week(),
-        'pendingComponentReviews': _pending_component_reviews(),
+        'pendingComponentReviews': len(missing_content),
+        'missingContent': missing_content,
+        'dataSources': data_sources,
+        'workflowStageProgress': production_metrics.workflow_stage_progress(),
+        'slaAtRisk': production_metrics.sla_at_risk(),
+        'deliverySla': production_metrics.delivery_sla(),
+        'upcomingDeadlines': production_metrics.upcoming_deadlines(),
+    })
+
+
+@dashboard_blueprint.get('/api/dashboard/management')
+@require_auth(roles=['admin', 'editor', 'viewer'])
+def get_management_dashboard():
+    """The Management tab's aggregates, on their own endpoint.
+
+    These scan every step instance and every report's workflow diagram, so
+    they're deliberately not folded into /api/dashboard -- that payload is
+    fetched on every visit to the Production Hub, and this one only when
+    somebody opens the tab that shows it."""
+    return jsonify({
+        'slowestSteps': production_metrics.slowest_steps(),
+        'bottleneckByGroup': production_metrics.bottleneck_by_group(),
+        'teamScorecard': production_metrics.team_scorecard(),
+        'minVisitsForAverage': production_metrics.MIN_VISITS_FOR_AVERAGE,
     })

@@ -4,7 +4,7 @@ import { DndContext, KeyboardSensor, PointerSensor, closestCenter, useSensor, us
 import { SortableContext, arrayMove, rectSortingStrategy, sortableKeyboardCoordinates, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { apiFetch, isDemoMode } from '../api';
-import { DEFAULT_LAYOUT, WIDGETS_BY_ID, widgetsForRole } from './dashboardWidgets';
+import { MANAGEMENT_WIDGET_IDS, TABS, WIDGETS_BY_ID, defaultLayout, widgetsForRole } from './dashboardWidgets';
 import PageGreeting from './PageGreeting';
 
 const demoDashboard = {
@@ -32,24 +32,63 @@ const demoDashboard = {
     { label: 'W32', count: 2 }, { label: 'W33', count: 1 }, { label: 'W34', count: 4 }, { label: 'W35', count: 2 },
   ],
   pendingComponentReviews: 2,
+  dataSources: [
+    { id: 1, name: 'Snowflake — Positions', type: 'snowflake', status: 'success', message: null, lastSyncedAt: null },
+    { id: 2, name: 'Custodian API', type: 'api', status: 'never', message: null, lastSyncedAt: null },
+  ],
+  missingContent: [
+    { reportId: 2, reportTitle: 'July Performance Summary', componentId: 'c1', componentLabel: 'Commentary' },
+    { reportId: 2, reportTitle: 'July Performance Summary', componentId: 'c2', componentLabel: 'Holdings' },
+  ],
+  workflowStageProgress: [{ label: 'Compliance review', count: 3 }, { label: 'Drafting', count: 2 }],
+  slaAtRisk: { breached: 1, approaching: 2, windowDays: 3 },
+  deliverySla: { sla_breached: 1, flagged: 1, watch: 2, on_track: 5 },
+  upcomingDeadlines: [
+    { reportId: 2, title: 'July Performance Summary', dueDate: null, daysRemaining: -2 },
+    { reportId: 1, title: 'Q2 Institutional Portfolio Report', dueDate: null, daysRemaining: 6 },
+  ],
 };
 
-const layoutKey = (role) => `lumina_dashboard_layout_${role || 'viewer'}`;
+const demoManagement = {
+  slowestSteps: [
+    { label: 'Compliance review', avgHours: 38.4, visits: 6 },
+    { label: 'Portfolio sign-off', avgHours: 12.1, visits: 9 },
+    { label: 'Drafting', avgHours: 6.5, visits: 11 },
+  ],
+  bottleneckByGroup: [
+    { label: 'Compliance', count: 3, oldestDays: 5.2 },
+    { label: 'Client Reporting', count: 1, oldestDays: 0.4 },
+  ],
+  teamScorecard: [
+    { label: 'Wealth Management', total: 5, open: 2, delivered: 3, avgTurnaroundDays: 6.4 },
+    { label: 'Institutional Sales', total: 4, open: 4, delivered: 0, avgTurnaroundDays: null },
+  ],
+  minVisitsForAverage: 2,
+};
 
-const loadLayout = (role) => {
+// Each tab keeps its own arrangement -- they hold different widgets, so one
+// shared list would mean rearranging Management silently rewrote Day-to-day.
+// The Day-to-day key is the original unsuffixed one, so an existing saved
+// layout carries over instead of being reset by this change.
+const layoutKey = (role, tab) =>
+  `lumina_dashboard_layout_${role || 'viewer'}${tab === 'dayToDay' ? '' : `_${tab}`}`;
+
+const loadLayout = (role, tab) => {
   try {
-    const raw = window.localStorage.getItem(layoutKey(role));
+    const raw = window.localStorage.getItem(layoutKey(role, tab));
     if (raw) {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed.visible)) return parsed.visible;
     }
   } catch { /* corrupt/blocked storage -- fall through to defaults */ }
-  return DEFAULT_LAYOUT[role] || DEFAULT_LAYOUT.viewer || [];
+  return defaultLayout(role, tab);
 };
 
-const saveLayout = (role, visible) => {
-  try { window.localStorage.setItem(layoutKey(role), JSON.stringify({ visible })); } catch { /* per-viewer convenience only */ }
+const saveLayout = (role, tab, visible) => {
+  try { window.localStorage.setItem(layoutKey(role, tab), JSON.stringify({ visible })); } catch { /* per-viewer convenience only */ }
 };
+
+const TAB_KEY = 'lumina_production_hub_tab';
 
 const SortableWidget = ({ id, size, title, demo, onHide, children }) => {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
@@ -72,10 +111,17 @@ const Dashboard = () => {
   const role = window.localStorage.getItem('lumina_role') || 'viewer';
 
   const [data, setData] = useState(null);
+  // The Management tab's aggregates come from their own endpoint and are
+  // fetched lazily -- see the effect below.
+  const [management, setManagement] = useState(null);
   // 'live' | 'demo' | 'unavailable' -- distinct from isDemoMode, so a real
   // fetch failure never gets silently presented as though it were real data.
   const [source, setSource] = useState(isDemoMode ? 'demo' : 'live');
-  const [visibleIds, setVisibleIds] = useState(() => loadLayout(role));
+  const [tab, setTab] = useState(() => {
+    const saved = window.localStorage.getItem(TAB_KEY);
+    return TABS.some(t => t.key === saved) ? saved : 'dayToDay';
+  });
+  const [visibleIds, setVisibleIds] = useState(() => loadLayout(role, tab));
 
   useEffect(() => {
     if (isDemoMode) { setData(demoDashboard); return; }
@@ -84,15 +130,29 @@ const Dashboard = () => {
       .catch(() => { setData(demoDashboard); setSource('unavailable'); });
   }, []);
 
-  const dashboard = data || demoDashboard;
-  const failedSources = dashboard.failedDataSources || [];
-
-  const availableWidgets = widgetsForRole(role);
+  const availableWidgets = widgetsForRole(role, tab);
   const availableIds = new Set(availableWidgets.map(w => w.id));
   const widgetIds = visibleIds.filter(id => availableIds.has(id) && WIDGETS_BY_ID[id]);
+
+  // Fetched the first time a management widget is actually on screen, and
+  // only once -- a user who never opens that tab never runs its queries.
+  const needsManagement = widgetIds.some(id => MANAGEMENT_WIDGET_IDS.has(id));
+  useEffect(() => {
+    if (!needsManagement || management) return;
+    if (isDemoMode) { setManagement(demoManagement); return; }
+    apiFetch('/api/dashboard/management').then(setManagement).catch(() => setManagement(demoManagement));
+  }, [needsManagement, management]);
+
+  useEffect(() => {
+    window.localStorage.setItem(TAB_KEY, tab);
+    setVisibleIds(loadLayout(role, tab));
+  }, [tab, role]);
+
+  const dashboard = data || demoDashboard;
+  const failedSources = dashboard.failedDataSources || [];
   const hiddenWidgets = availableWidgets.filter(w => !widgetIds.includes(w.id));
 
-  const persistAndSet = (next) => { setVisibleIds(next); saveLayout(role, next); };
+  const persistAndSet = (next) => { setVisibleIds(next); saveLayout(role, tab, next); };
   const handleHide = (id) => persistAndSet(widgetIds.filter(w => w !== id));
   const handleAdd = (id) => { if (id) persistAndSet([...widgetIds, id]); };
 
@@ -129,6 +189,14 @@ const Dashboard = () => {
         </div>
       )}
 
+      <div className="view-tabs production-hub-tabs">
+        {TABS.map(t => (
+          <button key={t.key} type="button" className={`view-tab ${tab === t.key ? 'active' : ''}`} onClick={() => setTab(t.key)}>
+            {t.label}
+          </button>
+        ))}
+      </div>
+
       <div className="dashboard-toolbar">
         <p className="panel-subtitle">Drag a widget's handle to rearrange it, or hide/add widgets below.</p>
         {hiddenWidgets.length > 0 && (
@@ -150,7 +218,7 @@ const Dashboard = () => {
               if (!widget) return null;
               return (
                 <SortableWidget key={id} id={id} size={widget.size} title={widget.title} demo={widget.demo} onHide={() => handleHide(id)}>
-                  {widget.render(dashboard, role)}
+                  {widget.render(dashboard, role, management)}
                 </SortableWidget>
               );
             })}
