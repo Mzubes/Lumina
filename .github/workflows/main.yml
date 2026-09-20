@@ -38,5 +38,9 @@ jobs:
           python-version: '3.12'
           cache: pip
           cache-dependency-path: lumina-reporting/backend/requirements-dev.txt
+      # The print tests rasterise real PDFs (pdftoppm) and compare them
+      # against golden references rendered in DejaVu Sans. Without these the
+      # whole print suite skips silently.
+      - run: sudo apt-get update && sudo apt-get install -y poppler-utils fonts-dejavu-core
       - run: pip install -r requirements-dev.txt
       - run: pytest

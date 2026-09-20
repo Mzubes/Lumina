@@ -1,0 +1,128 @@
+{
+  "report_title": "Pzena Global Small Cap \u2014 Monthly Factsheet",
+  "client_name": "Meridian Pension Partners",
+  "generated_at": "2026-06-30T09:00:00",
+  "header_config": {
+    "title": "Pzena Global Small Cap \u2014 Monthly Factsheet",
+    "subtitle": "FACTSHEET \u00b7 as at 30 June 2026"
+  },
+  "footer_config": {
+    "text": "Confidential \u2014 for institutional use only"
+  },
+  "theme_config": {
+    "primary_color": "#0d6b5f",
+    "accent_color": "#c9bd9a"
+  },
+  "components": [
+    {
+      "type": "text_block",
+      "title": "Investment approach",
+      "text": "The strategy invests in the most undervalued quintile of global small-capitalisation companies, judged on normalised earnings power rather than reported earnings.\n\nPositions are held through the full cycle; turnover is low by design and the portfolio is deliberately concentrated."
+    },
+    {
+      "type": "data_table",
+      "title": "Sector Weights",
+      "chart_type": "bar_comparison",
+      "columns": [
+        "Sector",
+        "Strategy",
+        "Index"
+      ],
+      "rows": [
+        [
+          "Financials",
+          "22%",
+          "18%"
+        ],
+        [
+          "Industrials",
+          "19%",
+          "16%"
+        ],
+        [
+          "Consumer Discretionary",
+          "16%",
+          "13%"
+        ],
+        [
+          "Materials",
+          "11%",
+          "9%"
+        ],
+        [
+          "Information Technology",
+          "9%",
+          "14%"
+        ],
+        [
+          "Energy",
+          "7%",
+          "5%"
+        ]
+      ]
+    },
+    {
+      "type": "data_table",
+      "title": "Top Ten Holdings",
+      "columns": [
+        "Holding",
+        "Country",
+        "Weight",
+        "Market Value"
+      ],
+      "rows": [
+        [
+          "Tate & Lyle",
+          "United Kingdom",
+          "3.4%",
+          "$12,480,000"
+        ],
+        [
+          "Greif Inc",
+          "United States",
+          "3.1%",
+          "$11,370,000"
+        ],
+        [
+          "Hanwha Corp",
+          "South Korea",
+          "2.9%",
+          "$10,640,000"
+        ],
+        [
+          "Iwatani Corp",
+          "Japan",
+          "2.7%",
+          "$9,910,000"
+        ],
+        [
+          "Vontier Corp",
+          "United States",
+          "2.6%",
+          "$9,540,000"
+        ]
+      ]
+    },
+    {
+      "type": "people_grid",
+      "title": "Investment Team",
+      "people": [
+        {
+          "name": "A. Ferreira",
+          "title": "Portfolio Manager",
+          "detail": "22 years"
+        },
+        {
+          "name": "R. Okonkwo",
+          "title": "Portfolio Manager",
+          "detail": "17 years"
+        },
+        {
+          "name": "M. Lindqvist",
+          "title": "Research Analyst",
+          "detail": "9 years"
+        }
+      ]
+    }
+  ]
+}

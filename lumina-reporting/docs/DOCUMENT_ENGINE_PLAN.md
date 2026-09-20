@@ -83,22 +83,64 @@ and assert the Unicode that fpdf2 currently mangles survives intact.
 
 ---
 
-### B · Print-CSS discipline · ~2–3 days
+### B · Print-CSS discipline · ~2–3 days · **SHIPPED**
 
 **Goal:** stop the silent-failure class found in testing.
 
-- **`color-mix()` renders nothing in WeasyPrint.** Verified: plain hex ✓,
-  `linear-gradient` ✓, `color-mix` ✗ — and it fails **silently**.
-  `styles.css` has **48 uses**.
-- Precompute every derived colour into a literal token. The screen stylesheet
-  may keep `color-mix`; the print stylesheet may not.
-- Add a lint rule failing any `color-mix` in print CSS
-- Golden-render tests: render N fixture documents to PNG, compare against
-  committed references with a pixel tolerance. This is the only way a CSS
-  regression in a PDF gets caught before a client sees it.
+Probing 18 CSS features against the real engine found **two** silent
+failures, not one:
 
-**Verification:** the lint rule fails on a deliberately reintroduced
-`color-mix`; a deliberate 2px padding change fails the golden test.
+| Feature | Result |
+|---|---|
+| `color-mix()` | draws nothing — `styles.css` uses it 48 times |
+| `aspect-ratio` | draws nothing — a natural reach for a chart container |
+
+Everything else tried renders correctly, **CSS grid and flexbox included**,
+which is what makes a real layout engine viable here at all. The full
+matrix is `tests/test_print_css_support.py`, and it is pinned in both
+directions: a WeasyPrint upgrade that *starts* supporting one of the two
+fails the suite, so the allow-list widens deliberately rather than by
+accident.
+
+- `tests/test_print_css_lint.py` scans every print-path source for a banned
+  feature and reports file and line. The banned list is derived from the
+  support matrix rather than restated, so there is no second list to forget.
+  Commentary is stripped first — the template's own warning about
+  `color-mix()` must stay writable.
+- `tests/test_golden_documents.py` renders three fixtures (a factsheet, a
+  60-row table that spans pages, and an edge-case document), rasterises
+  every page, and compares against committed references.
+
+Comparison runs on a **downsampled fingerprint**, not raw pixels: the same
+document rasterised on two machines differs in thousands of glyph-edge
+pixels without one visible change, so an exact-match test would be either
+permanently red or uselessly loose. Measured separation on the factsheet:
+
+| Change | Difference |
+|---|---|
+| none | 0.00% |
+| one table row dropped | 3.9% |
+| theme colour changed | 9.5% |
+| chart removed | 100% |
+| footer wording changed | 0.06% |
+
+The 1% threshold sits cleanly between. The last row is the honest limit: a
+coarse fingerprint cannot see a reworded footer, which is why the running
+header and footer keep their own assertions in `test_html_pdf_renderer.py`.
+
+A committed canary (`tests/golden/_environment.png`) renders text through
+the engine but **not** through the report template. If it mismatches, the
+machine lays out text differently and the golden tests **skip with that
+reason** instead of failing — a red build for a reason nobody can act on is
+worse than a gap you can read. CI installs `poppler-utils` and
+`fonts-dejavu-core` so the tests actually run there rather than skipping.
+
+**Verified:** raising the table font size 8.5pt → 10.5pt fails the golden
+tests (4.2% and 14.3%) while leaving the canary matched — proving the guard
+discriminates between "the document changed" and "this machine is
+different". The lint catches a synthetic `color-mix` and ignores it in
+comments. Also fixed in this phase: `pypdf`, imported by the Phase A tests,
+was a dependency of nothing — CI would have failed on import.
 
 ---
 
