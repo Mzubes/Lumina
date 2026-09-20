@@ -351,7 +351,7 @@ inside guardrails marketing sets:
 
 | | Sub-phase | Delivers |
 |---|---|---|
-| E1 | Page surface + element model | A4/Letter, portrait/landscape, margins, rulers, grid, zoom. Elements as absolutely-positioned DOM. |
+| E1 | Page surface + element model · **SHIPPED** | A4/Letter, portrait/landscape, margins, rulers, grid, zoom. Elements as absolutely-positioned DOM. |
 | E2 | Direct manipulation | Select, multi-select, drag, resize handles, snap-to-grid, snap-to-element, alignment guides, z-order, keyboard nudge, undo/redo. Via `interact.js` or `moveable` on DOM. |
 | E3 | Properties inspector | Right panel: position, size, typography, colour from the brand kit, borders, padding — the Coric Properties pane. |
 | E4 | Data binding | Bind an element to a `DatasetField` or `DisplaySpec`. Field picker driven by the dataset's own metadata. Live sample values on the canvas. |
@@ -363,6 +363,29 @@ elements become canvas objects, which means reimplementing text layout, line
 breaking, kerning and table flow, and then writing a second renderer for PDF.
 Two layout engines that drift. A report is mostly text in tables; the browser
 already does that perfectly.
+
+**E1 as built.** The canvas lays out in CSS `mm` — the same unit
+`renderers/templates/report.html` uses — so there is no conversion in the
+layout path and nothing to drift. `paper.js` holds the geometry (page
+sizes, margins, content box, ruler ticks, grid, snapping, clamping) and is
+unit-tested; `MM_TO_PX` exists only for the ruler, which has to be drawn
+in device pixels.
+
+Measured in a real browser rather than asserted:
+
+| | Expected | Actual |
+|---|---|---|
+| A4 sheet | 793.70 × 1122.52 px | 793.69 × 1122.52 |
+| Content box (178mm) | 672.76 | 672.75 |
+| Element at x=150mm in a 16mm margin | 627.40 | 627.39 |
+| Landscape @ 50% | 561.26 × 396.85 | 561.26 × 396.84 |
+
+Sub-pixel agreement, which is the WYSIWYG guarantee the phase rests on.
+
+**Not yet:** E2 (drag, resize, snap, undo) — nothing moves on the surface
+yet, deliberately: the unit had to be right before anything moved on it.
+The canvas reads a template held in component state; the template API
+(E4/E5) is what makes it persist.
 
 **Verification:** rebuild the seeded Pzena factsheet from scratch on the
 canvas, with no code, and render it.

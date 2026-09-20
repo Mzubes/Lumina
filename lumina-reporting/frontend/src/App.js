@@ -17,6 +17,7 @@ import Reports from './components/reports';
 import StaffTriage from './components/StaffTriage';
 import ReportDetail from './components/ReportDetail';
 import Templates from './components/templates';
+import TemplateCanvas from './components/canvas/TemplateCanvas';
 import Users from './components/users';
 import WorkflowGroups from './components/workflowGroups';
 import Login from './pages/Login';
@@ -214,6 +215,7 @@ function AuthenticatedShell() {
           <Route path="/data-hub" element={<RequireAuth><DataHub /></RequireAuth>} />
           <Route path="/data-sources" element={<RequireAuth><DataSources /></RequireAuth>} />
           <Route path="/templates" element={<RequireAuth><Templates /></RequireAuth>} />
+          <Route path="/template-canvas" element={<RequireAuth><TemplateCanvas /></RequireAuth>} />
           <Route path="/reports" element={<RequireAuth><Reports /></RequireAuth>} />
           <Route path="/reports/:id" element={<RequireAuth><ReportDetail /></RequireAuth>} />
           <Route path="/queue" element={<RequireAuth><MyQueue /></RequireAuth>} />
