@@ -12,6 +12,7 @@ from models import (
 )
 from renderers import CONTENT_TYPES, RENDERERS
 from report_content import resolve_report_content, reviewable_components
+import report_filters
 from report_generator import generate_pdf
 from routes.auth import require_auth
 import workflow_engine
@@ -99,6 +100,16 @@ def list_reports():
     reports = query.order_by(Report.created_at.desc()).all()
     if g.current_user.get('role') == 'client':
         reports = [r for r in reports if workflow_engine.report_is_distributed(r)]
+    else:
+        # Applied after the query because neither predicate is expressible as
+        # a SQL filter -- see report_filters. These back the start screen's
+        # "Where things are stuck" / "Overdue reports" cards, which link here
+        # with ?stuck=1 / ?overdue=1, so both share that module's definitions
+        # with /api/triage rather than restating them.
+        if request.args.get('stuck') == '1':
+            reports = report_filters.stuck_reports(reports)
+        if request.args.get('overdue') == '1':
+            reports = report_filters.overdue_reports(reports)
     return jsonify([_serialize_report(report) for report in reports])
 
 @reports_blueprint.get('/api/reports/facets')
@@ -527,10 +538,8 @@ def _is_in_flight(report):
         return report.status in ('review', 'compliance')
     return workflow_engine.is_in_flight(report)
 
-@reports_blueprint.get('/api/reports/my-queue')
-@require_auth(roles=['admin', 'editor', 'viewer'])
-def get_my_queue():
-    """Everything actionable by the caller, in one place, each with why it's
+def build_my_queue(role, user_id):
+    """Everything actionable by this user, in one place, each with why it's
     there -- merges workflow actions (approvals, certifications, or any
     diagram edge the caller is eligible to fire) with pending component
     reviews. A report needing more than one thing appears once with
@@ -541,9 +550,10 @@ def get_my_queue():
     draft/review/compliance/approved/distributed queue, with the compliance
     step now keyed off membership in the 'Compliance' workflow group --
     the exact group `flask migrate-workflow-diagrams` creates for former
-    role='compliance' users -- instead of a hardcoded role."""
-    role = g.current_user.get('role')
-    user_id = g.current_user['user_id']
+    role='compliance' users -- instead of a hardcoded role.
+
+    Returned as entries rather than a response so /api/triage can count the
+    same queue without duplicating any of this eligibility logic."""
     queue = {}
 
     def add_reason(report, **reason):
@@ -586,5 +596,10 @@ def get_my_queue():
                 components=[c.get('title') for c in pending],
             )
 
-    entries = sorted(queue.values(), key=lambda entry: entry['report'].created_at or datetime.datetime.min, reverse=True)
+    return sorted(queue.values(), key=lambda entry: entry['report'].created_at or datetime.datetime.min, reverse=True)
+
+@reports_blueprint.get('/api/reports/my-queue')
+@require_auth(roles=['admin', 'editor', 'viewer'])
+def get_my_queue():
+    entries = build_my_queue(g.current_user.get('role'), g.current_user['user_id'])
     return jsonify([{**_serialize_report(entry['report']), 'reasons': entry['reasons']} for entry in entries])

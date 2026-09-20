@@ -13,6 +13,7 @@ import Marketing from './components/marketing';
 import MyQueue from './components/MyQueue';
 import Pitchbooks from './components/pitchbooks';
 import Reports from './components/reports';
+import StaffTriage from './components/StaffTriage';
 import ReportDetail from './components/ReportDetail';
 import Templates from './components/templates';
 import Users from './components/users';
@@ -204,6 +205,10 @@ function AuthenticatedShell() {
       <GlobalSearch open={searchOpen} onClose={() => setSearchOpen(false)} />
       <main className="main-content">
         <Routes>
+          {/* The post-login front door. Deliberately additive -- Production
+              Hub stays at '/' and reachable from the nav; this orients you,
+              it doesn't replace the working dashboard. */}
+          <Route path="/start" element={<RequireAuth><StaffTriage /></RequireAuth>} />
           <Route path="/" element={<RequireAuth><Dashboard /></RequireAuth>} />
           <Route path="/data-hub" element={<RequireAuth><DataHub /></RequireAuth>} />
           <Route path="/data-sources" element={<RequireAuth><DataSources /></RequireAuth>} />

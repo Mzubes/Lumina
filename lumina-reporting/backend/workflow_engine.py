@@ -230,6 +230,27 @@ def apply_transition(report, edge_id, actor_id, note=None):
     db_session.commit()
     return report
 
+def can_distribute_now(report, role, user_id):
+    """True when this user has an action available that would take the report
+    *into* its distribution gate -- i.e. it's approved, waiting, and one click
+    from going out. Distinct from is_distribution_gate_reached, which is about
+    having already gone out.
+
+    Lives here rather than in a route because it needs the edge's target node,
+    which eligible_actions deliberately doesn't expose (it reports the node
+    being acted on, not where each edge leads)."""
+    diagram = get_diagram(report)
+    if diagram is None:
+        # Legacy reports have no diagram: 'approved' is the fixed pipeline's
+        # one-step-from-distribution state.
+        return report.status == 'approved'
+    nodes_by_id, edges_by_id = _index(diagram)
+    for action in eligible_actions(report, role, user_id):
+        edge = edges_by_id.get(action['edge_id'])
+        if edge and nodes_by_id.get(edge['to_node'], {}).get('is_distribution_gate'):
+            return True
+    return False
+
 def is_distribution_gate_reached(report):
     """True once the report's current active step(s) include a node flagged
     is_distribution_gate. A terminal node, once entered, stays 'active'

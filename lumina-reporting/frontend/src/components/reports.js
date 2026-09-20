@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import { apiDownload, apiFetch, fireReportAction, isDemoMode } from '../api';
 import ReportsTable, { getReportActions, statusBreakdown } from './ReportsTable';
 import CompositionBar from './charts/CompositionBar';
@@ -28,7 +29,22 @@ export const REPORT_TYPE_LABELS = {
   custom: 'Custom',
 };
 
-export const emptyFilters = { status: '', client_id: '', team: '', report_type: '', asset_class: '', q: '' };
+export const emptyFilters = {
+  status: '', client_id: '', team: '', report_type: '', asset_class: '', q: '', stuck: '', overdue: '',
+};
+
+// The start screen's "Where things are stuck" / "Overdue reports" cards deep-link
+// here. Only those two filters are ever read from the URL -- everything else in
+// the filter bar stays local state, so a link can't silently pin a filter the
+// user can't see. Both render as removable pills below.
+export const filtersFromSearch = (search) => {
+  const params = new URLSearchParams(search);
+  return {
+    ...emptyFilters,
+    stuck: params.get('stuck') === '1' ? '1' : '',
+    overdue: params.get('overdue') === '1' ? '1' : '',
+  };
+};
 
 export const buildQuery = (filters) => {
   const params = new URLSearchParams();
@@ -59,7 +75,8 @@ const Reports = () => {
   const role = window.localStorage.getItem('lumina_role') || '';
   const canCreate = ['admin', 'editor'].includes(role);
 
-  const [filters, setFilters] = useState(emptyFilters);
+  const location = useLocation();
+  const [filters, setFilters] = useState(() => filtersFromSearch(location.search));
   const [searchInput, setSearchInput] = useState('');
   const [facets, setFacets] = useState({ teams: [], reportTypes: [], assetClasses: [] });
   const [clients, setClients] = useState([]);
@@ -80,6 +97,14 @@ const Reports = () => {
   };
 
   useEffect(loadReports, [filters]);
+
+  // Re-seed when the deep link changes while this page is already mounted --
+  // e.g. arriving from /start on ?stuck=1 and then clicking Reports in the nav,
+  // which must drop the filter rather than leave it silently applied.
+  useEffect(() => {
+    setFilters(filtersFromSearch(location.search));
+    setSearchInput('');
+  }, [location.search]);
 
   useEffect(() => {
     if (isDemoMode) return;
@@ -261,6 +286,22 @@ const Reports = () => {
         </div>
         <div className="filter-bar">
           <div className="filter-pills">
+            {filters.stuck === '1' && (
+              <button
+                type="button" className="filter-pill active" onClick={() => updateFilter('stuck', '')}
+                title="Showing only open reports with no workflow movement in 3+ days"
+              >
+                Stuck <span aria-hidden="true">×</span>
+              </button>
+            )}
+            {filters.overdue === '1' && (
+              <button
+                type="button" className="filter-pill active" onClick={() => updateFilter('overdue', '')}
+                title="Showing only open reports past their due date"
+              >
+                Overdue <span aria-hidden="true">×</span>
+              </button>
+            )}
             {STATUS_PILLS.map(pill => (
               <button
                 key={pill.value} type="button"

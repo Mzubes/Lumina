@@ -25,7 +25,7 @@ const Login = () => {
       } else {
         window.localStorage.removeItem('lumina_client_id');
       }
-      navigate(data.role === 'client' ? '/client-portal' : '/');
+      navigate(data.role === 'client' ? '/client-portal' : '/start');
     } catch (requestError) { setError(requestError.message); }
   };
 

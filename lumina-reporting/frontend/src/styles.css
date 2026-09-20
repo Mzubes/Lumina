@@ -1114,6 +1114,44 @@ select { appearance: none; background-image: linear-gradient(45deg, transparent 
 .activity-type-component_review { background: color-mix(in srgb, var(--c-review) 14%, white); color: var(--c-review); }
 .activity-type-distribution_link { background: color-mix(in srgb, var(--c-distributed) 14%, white); color: var(--c-distributed); }
 
+/* ---------- start screen (staff triage) ---------- */
+/* The one page that opens with a full-bleed brand moment -- a once-per-session
+   surface is where a gradient reads as intentional rather than decorative. */
+.staff-triage { max-width: 760px; margin: 0 auto; padding: 36px 0 20px; }
+.staff-triage-hero { text-align: center; margin-bottom: 30px; }
+.staff-triage-mark {
+  width: 52px; height: 52px; margin: 0 auto 20px; border-radius: 14px;
+  display: grid; place-items: center;
+  background: var(--brand-gradient); color: #fff;
+  font-size: 23px; font-weight: 700; letter-spacing: -.02em;
+  box-shadow: 0 10px 24px color-mix(in srgb, var(--brand) 30%, transparent);
+}
+.staff-triage-subtitle { margin: 0; color: var(--ink-secondary); font-size: 15px; font-weight: 500; }
+.staff-triage-hero .demo-badge { margin-top: 16px; }
+
+.staff-triage-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.staff-triage-card {
+  display: flex; flex-direction: column; align-items: flex-start;
+  padding: 20px; border-radius: var(--radius-lg);
+  border: 1px solid var(--panel-border); background: var(--panel-bg);
+  box-shadow: var(--shadow-sm); color: inherit;
+  transition: border-color .2s ease, box-shadow .2s ease, transform .2s ease;
+}
+.staff-triage-card:hover {
+  border-color: var(--panel-border-strong); box-shadow: var(--shadow-md); transform: translateY(-1px);
+}
+.staff-triage-card-icon {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 32px; height: 32px; margin-bottom: 14px; border-radius: 9px;
+  background: var(--brand-tint); color: var(--brand);
+}
+.staff-triage-card-icon svg { width: 17px; height: 17px; }
+.staff-triage-card h2 { margin: 0 0 5px; font-size: 15px; }
+.staff-triage-card p { margin: 0 0 14px; font-size: 12.5px; color: var(--ink-muted); line-height: 1.45; }
+/* Pushed to the bottom so the counts line up across the row even when one
+   description wraps to two lines and another doesn't. */
+.staff-triage-count { margin-top: auto; font-size: 13px; font-weight: 700; color: var(--brand); }
+
 /* ---------- Lumina AI: persistent corner assistant ---------- */
 .lumina-ai { position: fixed; right: 24px; bottom: 24px; z-index: 60; display: flex; flex-direction: column; align-items: flex-end; gap: 14px; }
 button.lumina-ai-fab {
@@ -1194,6 +1232,7 @@ button.lumina-ai-close:hover { background: rgba(0,0,0,.06); color: var(--ink-pri
   .workflow-stepper { overflow-x: auto; padding-bottom: 4px; }
   .stepper-step { min-width: 78px; }
   .global-search-overlay { padding-top: 6vh; }
+  .staff-triage-grid { grid-template-columns: 1fr; }
   .lumina-ai { right: 14px; bottom: 14px; }
   .lumina-ai-panel { width: calc(100vw - 28px); }
 }
