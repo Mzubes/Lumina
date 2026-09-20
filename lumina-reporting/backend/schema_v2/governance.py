@@ -109,6 +109,23 @@ class DataLoad(Base, TimestampMixin):
     waiver_reason = Column(Text, nullable=True)
     waived_by_user_id = Column(Integer, nullable=True)  # -> users.id in the app schema
 
+    # --- warehouse provenance --------------------------------------------
+    # When the source is a warehouse (Snowflake being the expected one), the
+    # exact query and the exact point in time it read are worth keeping.
+    # Together they make a load re-runnable rather than merely described:
+    # Snowflake's Time Travel can reproduce the same rows from
+    # `source_as_of_timestamp` even after the table has since been reloaded,
+    # which is the difference between "we think this is what it said" and
+    # "here it is again".
+    #
+    # `source_query_reference` holds the warehouse's own query id; the
+    # statement itself lives in `source_statement` when the firm wants the
+    # SQL on record for audit. Neither is required -- a manual upload or an
+    # SFTP drop has no query.
+    source_query_reference = Column(String(200), nullable=True)
+    source_as_of_timestamp = Column(DateTime, nullable=True)
+    source_statement = Column(Text, nullable=True)
+
     # --- restatement chain ------------------------------------------------
     supersedes_id = Column(Integer, ForeignKey('data_load.id'), nullable=True)
     is_current = Column(Integer, nullable=False, default=1)

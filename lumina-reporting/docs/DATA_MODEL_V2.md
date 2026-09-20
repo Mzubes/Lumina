@@ -9,9 +9,11 @@ alongside today's schema and cut over deliberately.
 
 ## The decision this is built around
 
-**Lumina is a reporting system downstream of an already-reconciled book of
-record.** It does not reconcile. It records that reconciliation happened
-upstream, and refuses to publish numbers carrying no attestation.
+**Lumina reports and displays finalized data, sourced from the warehouse
+(Snowflake).** It is not a book of record. It does not reconcile, does not
+derive positions from transactions, and does not calculate returns. It
+records that reconciliation happened upstream, and refuses to publish
+numbers carrying no attestation.
 
 That single choice removes a lot — no break tables, no custodian-vs-internal
 comparison, no break-resolution workflow — and adds one thing: a publishing
@@ -216,15 +218,79 @@ instead of laundering it.
 
 ---
 
+## Sourcing from the warehouse
+
+Finalized facts live in Snowflake. That raises one architectural fork worth
+deciding explicitly, because the wrong answer is expensive to reverse.
+
+| | Copy everything | Read-through only | **Hybrid (recommended)** |
+|---|---|---|---|
+| Reference data (clients, portfolios, instruments, benchmarks) | ingested | live | **ingested** — small, slow-changing, needed for every screen |
+| Facts for ops screens | ingested | live per page load | **thin cached materialization** |
+| Facts for client packs | ingested forever | live at render | **frozen into a snapshot at approval** |
+| Reproducibility | yes, at the cost of warehousing every row forever | no — a reloaded table silently changes history | yes |
+| Warehouse cost | one sync | every page view | one query per pack + a periodic ops refresh |
+
+The hybrid is what this schema is shaped for. Reproducibility comes from
+freezing the *resolved payload* at approval, not from keeping every position
+row alive forever — a factsheet's payload is a few kilobytes, its source rows
+are not.
+
+Two supports for it:
+
+**`DataLoad` warehouse provenance.** `source_query_reference`,
+`source_as_of_timestamp` and `source_statement` record which query read what
+point in time. With Snowflake Time Travel that makes a load *re-runnable*,
+not merely described — the difference between "we think this is what it said"
+and "here it is again".
+
+**`ReportSnapshot` + `ReportDataBinding`.** The resolved content is frozen at
+approval with a content hash; the bindings name every load it drew on
+(positions, performance, benchmark, FX). Freezing checks
+`DataLoad.is_publishable` across the whole set, so one unattested load cannot
+slip into a pack alongside three good ones. A reissue is a new `version`,
+never an overwrite — the client already has the old one.
+
+### Two defects in the current app this closes
+
+Both are live on `main` today and both get worse the moment upstream data is
+restated, which finalized warehouse data routinely is.
+
+1. **`connectors/land.py` deletes before it writes.** `replace_holdings` and
+   `replace_performance` both run `.delete()` on the matching
+   `(client, fund, as_of_date)` rows and re-insert. A re-sync destroys the
+   prior version, so a report distributed last quarter can no longer be
+   reproduced. v2's append-only facts plus the supersession chain replace
+   this outright.
+
+2. **A distributed report's PDF is frozen but its preview is not.**
+   `Report.file_path` holds the rendered PDF, but
+   `routes/reports.py`'s export and preview paths call
+   `resolve_report_content()` again, live. After any restatement the PDF the
+   client holds and the preview beside it disagree, and nothing says so.
+   `ReportSnapshot` is the fix: freeze at approval, and render every format
+   from the snapshot thereafter.
+
+---
+
 ## Open questions for you
 
-1. **Are you the book of record, or downstream of one?** This design assumes
-   downstream. If some prospects have no IBOR and expect Lumina to *be* the
-   book, that's a materially different product and this schema is the wrong
-   shape for it.
+1. ~~Are you the book of record, or downstream of one?~~ **Answered:**
+   downstream, reporting finalized data from Snowflake. This schema is built
+   for that.
 2. **Do you need attribution?** Deliberately omitted. If client packs need
    sector or factor attribution, that's its own schema and worth scoping
    before cutover rather than after.
 3. **One firm per deployment, or true multi-tenant?** `firm_id` is present
    either way. If it's one firm per deployment, you never need the RLS
    policies and the column is just cheap insurance.
+4. **Does the warehouse hand you portfolio-level returns, or only
+   positions?** The schema takes returns as delivered. If Snowflake carries
+   positions and valuations but no return series, something has to compute
+   TWR — and doing it in Lumina contradicts decision 4 above. Worth
+   confirming before cutover, because it changes who owns the number.
+5. **How far back does Time Travel run on the relevant tables?** Snowflake's
+   retention (1 day on standard, up to 90 on enterprise) bounds how long
+   `source_as_of_timestamp` is actually re-runnable. Beyond that window the
+   frozen snapshot is the only record — which is fine, but it should be a
+   known fact rather than a surprise.

@@ -22,6 +22,7 @@ from .instruments import Instrument, InstrumentIdentifier  # noqa: F401
 from .benchmarks import Benchmark, BenchmarkComponent, PortfolioBenchmark  # noqa: F401
 from .composites import Composite, CompositeMembership  # noqa: F401
 from .governance import DataLoad, DataSource  # noqa: F401
+from .reporting import ReportDataBinding, ReportSnapshot  # noqa: F401
 from .facts import (  # noqa: F401
     BenchmarkReturn, CashFlow, CompositeReturn, FxRate, PerformanceReturn,
     Position, Transaction, Valuation,
@@ -36,6 +37,7 @@ __all__ = [
     'Benchmark', 'BenchmarkComponent', 'PortfolioBenchmark',
     'Composite', 'CompositeMembership',
     'DataSource', 'DataLoad',
+    'ReportSnapshot', 'ReportDataBinding',
     'Position', 'Transaction', 'Valuation', 'CashFlow',
     'PerformanceReturn', 'CompositeReturn', 'BenchmarkReturn', 'FxRate',
 ]

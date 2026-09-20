@@ -464,3 +464,126 @@ def test_every_table_carries_its_tenant(db):
         if name not in exempt and 'firm_id' not in table.columns
     ]
     assert missing == []
+
+
+# ---------------------------------------------------------------------------
+# Warehouse-sourced loads and frozen report snapshots
+#
+# These cover the shape that follows from sourcing finalized facts from a
+# warehouse: the load records which query read what point in time, and the
+# report freezes its resolved content rather than re-resolving live.
+# ---------------------------------------------------------------------------
+
+def test_a_warehouse_load_records_the_query_and_the_point_in_time_it_read(db, firm, load):
+    """Enough to re-run the exact read later via Time Travel, rather than
+    merely describing it."""
+    load.source_query_reference = '01b2c3d4-0000-abcd-0000-000000000001'
+    load.source_as_of_timestamp = datetime.datetime(2026, 7, 1, 6, 0, 0)
+    load.source_statement = 'SELECT * FROM REPORTING.POSITIONS WHERE AS_OF_DATE = %(d)s'
+    db.commit()
+
+    reread = db.get(v2.DataLoad, load.id)
+    assert reread.source_query_reference.startswith('01b2c3d4')
+    assert reread.source_as_of_timestamp.year == 2026
+
+
+def test_warehouse_provenance_is_optional(db, firm, load):
+    """A manual upload or an SFTP drop has no query id, and must not be
+    forced to invent one."""
+    assert load.source_query_reference is None
+    assert load.is_publishable is True
+
+
+def _snapshot(db, firm, report_id=1, version=1, payload='{"components": []}'):
+    record = v2.ReportSnapshot(
+        firm_id=firm.id, report_id=report_id, version=version,
+        as_of_date=datetime.datetime(2026, 6, 30), frozen_at=datetime.datetime.utcnow(),
+        payload=payload, content_hash='a' * 64,
+    )
+    db.add(record)
+    db.flush()
+    return record
+
+
+def test_a_snapshot_freezes_the_resolved_content_not_just_the_rendering(db, firm, load):
+    snapshot = _snapshot(db, firm, payload='{"top_holdings": [{"name": "Microsoft", "weight": 7.8}]}')
+    db.add(v2.ReportDataBinding(firm_id=firm.id, report_snapshot_id=snapshot.id,
+                                data_load_id=load.id))
+    db.commit()
+
+    stored = db.scalars(select(v2.ReportSnapshot)).one()
+    assert 'Microsoft' in stored.payload
+    bindings = db.scalars(select(v2.ReportDataBinding)).all()
+    assert [b.data_load_id for b in bindings] == [load.id]
+
+
+def test_a_reissue_is_a_new_version_never_an_overwrite(db, firm):
+    """The client already has the old pack, so it stays on record."""
+    _snapshot(db, firm, report_id=7, version=1, payload='{"nav": 1000000}')
+    _snapshot(db, firm, report_id=7, version=2, payload='{"nav": 1010000}')
+    db.commit()
+
+    versions = db.scalars(
+        select(v2.ReportSnapshot).where(v2.ReportSnapshot.report_id == 7)
+    ).all()
+    assert sorted(v.version for v in versions) == [1, 2]
+
+
+def test_two_snapshots_cannot_share_a_version(db, firm):
+    _snapshot(db, firm, report_id=7, version=1)
+    # _snapshot flushes, so the constraint fires on the insert itself rather
+    # than waiting for the commit.
+    with pytest.raises(IntegrityError):
+        _snapshot(db, firm, report_id=7, version=1)
+
+
+def test_a_snapshot_binds_every_load_it_drew_on(db, firm, load):
+    """A pack typically reads positions, performance, benchmark and FX --
+    the audit answer to "where did this number come from" needs all of them."""
+    source = db.get(v2.DataSource, load.source_id)
+    others = []
+    for domain in ('performance', 'benchmark', 'fx'):
+        extra = v2.DataLoad(firm_id=firm.id, source_id=source.id, domain=domain, book='abor',
+                            as_of_date=TODAY, loaded_at=datetime.datetime.utcnow(),
+                            reconciliation_status='reconciled')
+        db.add(extra)
+        others.append(extra)
+    db.flush()
+
+    snapshot = _snapshot(db, firm)
+    for record in [load, *others]:
+        db.add(v2.ReportDataBinding(firm_id=firm.id, report_snapshot_id=snapshot.id,
+                                    data_load_id=record.id))
+    db.commit()
+
+    bound = db.scalars(
+        select(v2.DataLoad.domain)
+        .join(v2.ReportDataBinding, v2.ReportDataBinding.data_load_id == v2.DataLoad.id)
+        .where(v2.ReportDataBinding.report_snapshot_id == snapshot.id)
+    ).all()
+    assert set(bound) == {'position', 'performance', 'benchmark', 'fx'}
+
+
+def test_the_publish_gate_is_checkable_across_every_bound_load(db, firm, load):
+    """One unattested load must not slip into a pack alongside three good
+    ones -- which is only enforceable if the check runs over the whole set."""
+    source = db.get(v2.DataSource, load.source_id)
+    bad = v2.DataLoad(firm_id=firm.id, source_id=source.id, domain='performance', book='abor',
+                      as_of_date=TODAY, loaded_at=datetime.datetime.utcnow(),
+                      reconciliation_status='unreconciled')
+    db.add(bad)
+    db.commit()
+
+    intended = [load, bad]
+    assert all(record.is_publishable for record in intended) is False
+    blocked = [record.domain for record in intended if not record.is_publishable]
+    assert blocked == ['performance']
+
+
+def test_a_snapshot_records_a_translated_presentation_currency(db, firm):
+    """So a reader knows the numbers were converted, rather than assuming the
+    portfolio's base."""
+    snapshot = _snapshot(db, firm)
+    snapshot.presentation_currency = 'EUR'
+    db.commit()
+    assert db.scalars(select(v2.ReportSnapshot)).one().presentation_currency == 'EUR'
