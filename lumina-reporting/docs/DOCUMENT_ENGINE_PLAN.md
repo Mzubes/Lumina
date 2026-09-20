@@ -144,7 +144,7 @@ was a dependency of nothing — CI would have failed on import.
 
 ---
 
-### C · Server-side chart pipeline · ~1 week
+### C · Server-side chart pipeline · ~1 week · **TIER 1 SHIPPED**
 
 **Goal:** vector charts in print, from one definition.
 
@@ -153,17 +153,50 @@ Three tiers, in order of preference:
 1. **Existing components, as markup.** `BarChart` and `CompositionBar` are
    pure HTML/CSS (zero SVG elements); `AreaChart` and `DonutChart` are static
    SVG. All four render in WeasyPrint natively. Port their markup+CSS into
-   the Jinja component templates — no library.
+   the Jinja component templates — no library. **Done** (`renderers/charts.py`,
+   `renderers/templates/charts.html`): bars, composition and ring.
 2. **Vega-Lite via `vl-convert-python`** for anything needing computed axes,
-   scales or legends. Pure Rust, no Node, no browser. A spec is JSON, so a
-   chart definition is a value a `DisplaySpec` can hold.
+   scales or legends — the line/area trend forms. Pure Rust, no Node, no
+   browser. A spec is JSON, so a chart definition is a value a `DisplaySpec`
+   can hold. Wheel confirmed available (33.5 MB, `cp37-abi3` manylinux).
+   **Not yet built.**
 3. matplotlib (already a dependency) as the escape hatch.
 
-- Chart colours resolve from `BrandKit.colors.chart_series`, not per-template
-- Re-run the dataviz palette validator against the print ground
+**The palette (C1).** Print does *not* inherit the screen's `--cat-1..6`.
+Against paper white that order fails the normal-vision floor — magenta and
+red adjacent at ΔE 13.2, under the floor of 15. All 120 re-orderings of
+those six hues were enumerated against the validator and none clears every
+gate, so print uses the full validated eight-hue reference set instead.
+The screen palette is unchanged and the divergence is pinned by a test;
+fixing it means changing hues, not order, which is a design decision.
 
-**Verification:** each chart type rendered at 300dpi and inspected; series
-colours match the brand kit; no raster artefacts.
+`renderers/color_science.py` ports the validator's arithmetic into Python
+so a brand kit's own `chart_series` can be checked where it is used — node
+cannot run in production. The port is pinned to the reference numbers. A
+brand palette that fails falls back to the default: rendering a client
+document off-brand beats rendering one whose series are indistinguishable.
+
+**Two defects found by looking at renders, not by tests:**
+
+- **A negative value drew as a positive-length bar.** An attribution of
+  −40bps was indistinguishable from +40bps and longer than a real +15 —
+  a false chart, not a rough one. Bar charts now go diverging (zero line
+  down the middle, bars growing outward) as soon as any value is negative.
+- **Keep-together cost a page per long section.** `break-inside: avoid` on
+  every section made the 60-row fixture open on a page at 1% ink: the
+  engine tries to honour the rule by pushing an over-tall section to a
+  fresh page, then gives up and breaks it anyway. It now applies only to
+  sections a height estimate says will fit in half a page.
+
+Both are pinned by tests, as is the pagination behaviour they depend on
+(`break-before: avoid` is honoured; `break-inside: avoid` degrades rather
+than clipping — worth proving, since clipping would silently drop rows
+from a client's statement).
+
+**Verification:** three chart types rendered at 150dpi and inspected; series
+colours match the palette; all vector, no raster artefacts. Golden
+references regenerated; tolerance tightened to 0.5% because keep-together
+shrank the blast radius of a small edit from 3.9% to 1.4%.
 
 ---
 

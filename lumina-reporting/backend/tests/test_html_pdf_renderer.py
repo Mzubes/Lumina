@@ -145,15 +145,17 @@ def test_a_percent_column_charts_rather_than_being_silently_skipped():
     vanished with no error."""
     component = _table([['Financials', '12%', '15%'], ['Industrials', '29%', '20%']],
                        chart_type='bar_comparison')
-    document = render_document_html(_content(components=[component]))
-    body = _body(document)
-    assert 'chart-bar-a' in body
-    assert 'chart-bar-b' in body
+    body = _body(render_document_html(_content(components=[component])))
+    # Both series drawn, each at a width derived from the parsed number --
+    # 29% is the peak, so it is the full-width bar.
+    assert body.count('class="chart-bar"') == 4
+    assert 'width: 100.0%' in body
+    assert 'width: 41.4%' in body  # 12 of 29
 
 
 def test_a_non_numeric_column_produces_no_chart():
     component = _table([['Financials', 'n/a', 'n/a']], chart_type='bar_comparison')
-    assert 'chart-bar-a' not in _body(render_document_html(_content(components=[component])))
+    assert 'class="chart-bar"' not in _body(render_document_html(_content(components=[component])))
 
 
 def test_numeric_columns_right_align_and_text_columns_do_not():
@@ -221,3 +223,38 @@ def test_both_renderers_still_accept_the_same_payload():
     content = _content(components=[_table([['Financials', '12%', '15%']])])
     assert RENDERERS['pdf'](content).startswith(b'%PDF')
     assert RENDERERS['pdf_legacy'](content).startswith(b'%PDF')
+
+
+# ---------------------------------------------------------------------------
+# Keep-together, and what it costs
+# ---------------------------------------------------------------------------
+
+def test_a_short_section_asks_to_be_kept_on_one_page():
+    """Without it, a four-row table's chart strands itself at the top of the
+    next page, arriving under the PREVIOUS section's heading -- which is how
+    a reader attributes it."""
+    component = _table([['Equity', 62], ['Cash', 38]], columns=['Asset', 'Weight'],
+                       chart_type='donut', title='Asset Allocation')
+    assert 'component-compact' in _body(render_document_html(_content(components=[component])))
+
+
+def test_a_long_section_does_not():
+    """Caught by looking at a render, not by a test: asking the engine to
+    keep an over-tall section together costs a whole page. It first tries to
+    honour the rule by pushing the section to a fresh page, then gives up
+    and breaks it anyway -- leaving the page before it blank.
+    """
+    component = _table([[f'Holding {index}', index] for index in range(1, 61)],
+                       columns=['Security', 'Units'], title='Positions')
+    assert 'component-compact' not in _body(render_document_html(_content(components=[component])))
+
+
+def test_a_long_document_does_not_open_with_a_blank_page():
+    """The regression test for that bug, measured where it showed up: the
+    first page of the 60-row fixture came back at 1% ink."""
+    from tests.print_testing import content_to_images, ink_ratio
+
+    component = _table([[f'Holding {index}', f'{index * 1375:,}'] for index in range(1, 61)],
+                       columns=['Security', 'Units'], title='Positions')
+    first = content_to_images(_content(components=[component]))[0]
+    assert ink_ratio(first) > 0.10, 'the document opens on a near-blank page'

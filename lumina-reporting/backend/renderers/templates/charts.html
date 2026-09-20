@@ -1,0 +1,102 @@
+{#
+  Chart markup for print.
+
+  Ports of the app's BarChart / CompositionBar / DonutChart, with the
+  hover layer removed and everything it carried promoted onto the page:
+  a legend for two or more series, a direct value label on every mark.
+  That is not politeness -- three palette hues sit below 3:1 against
+  paper, and visible labels are what makes them legal.
+
+  Every colour reaching these macros is already a literal hex resolved in
+  Python. Nothing here may use color-mix() or aspect-ratio; the print-CSS
+  lint fails the build if it does.
+#}
+
+{% macro legend(entries) %}
+  {% if entries %}
+    <div class="chart-legend">
+      {% for entry in entries %}
+        <span class="chart-legend-item">
+          <span class="chart-swatch" style="background: {{ entry.color }}"></span>
+          {{ entry.label }}{% if entry.value_label %} · {{ entry.value_label }}{% endif %}
+        </span>
+      {% endfor %}
+    </div>
+  {% endif %}
+{% endmacro %}
+
+{% macro bar_chart(chart) %}
+  <div class="chart">
+    {% for row in chart.rows %}
+      <div class="chart-row">
+        <span class="chart-label">{{ row.label }}</span>
+        <div class="chart-bars">
+          {% for bar in row.bars %}
+            {% if chart.signed %}
+              {# Diverging: zero down the middle, bars growing away from it.
+                 A negative drawn as a positive-length bar is a false chart. #}
+              <div class="chart-bar-line chart-bar-signed">
+                <span class="chart-side chart-side-neg">
+                  {% if bar.negative %}
+                    <span class="chart-value">{{ bar.value_label }}</span>
+                    <span class="chart-bar" style="width: {{ '%.1f' | format(bar.pct) }}%; background: {{ bar.color }}"></span>
+                  {% endif %}
+                </span>
+                <span class="chart-side chart-side-pos">
+                  {% if not bar.negative %}
+                    <span class="chart-bar" style="width: {{ '%.1f' | format(bar.pct) }}%; background: {{ bar.color }}"></span>
+                    <span class="chart-value">{{ bar.value_label }}</span>
+                  {% endif %}
+                </span>
+              </div>
+            {% else %}
+              <div class="chart-bar-line">
+                <span class="chart-bar" style="width: {{ '%.1f' | format(bar.pct) }}%; background: {{ bar.color }}"></span>
+                {# The direct label the screen component puts in a tooltip. #}
+                <span class="chart-value">{{ bar.value_label }}</span>
+              </div>
+            {% endif %}
+          {% endfor %}
+        </div>
+      </div>
+    {% endfor %}
+    {{ legend(chart.legend) }}
+  </div>
+{% endmacro %}
+
+{% macro composition_chart(chart) %}
+  <div class="chart">
+    <div class="chart-track">
+      {% for segment in chart.segments %}
+        {# flex-grow, so the segments always sum to exactly the track width
+           however the percentages round. #}
+        <span class="chart-segment"
+              style="flex-grow: {{ '%.4f' | format(segment.pct) }}; background: {{ segment.color }}"></span>
+      {% endfor %}
+    </div>
+    {{ legend(chart.legend) }}
+  </div>
+{% endmacro %}
+
+{% macro donut_chart(chart) %}
+  <div class="chart chart-donut">
+    <svg viewBox="0 0 {{ chart.box }} {{ chart.box }}" width="34mm" height="34mm" role="img">
+      <g transform="rotate(-90 {{ chart.box // 2 }} {{ chart.box // 2 }})">
+        {% for segment in chart.segments %}
+          <circle cx="{{ chart.box // 2 }}" cy="{{ chart.box // 2 }}" r="{{ chart.radius }}"
+                  fill="none" stroke="{{ segment.color }}" stroke-width="{{ chart.stroke }}"
+                  stroke-dasharray="{{ '%.2f' | format(segment.dash) }} {{ '%.2f' | format(segment.rest) }}"
+                  stroke-dashoffset="{{ '%.2f' | format(segment.offset) }}"></circle>
+        {% endfor %}
+      </g>
+    </svg>
+    <div class="chart-donut-legend">{{ legend(chart.legend) }}</div>
+  </div>
+{% endmacro %}
+
+{% macro chart(model) %}
+  {% if model.kind == 'bar' %}{{ bar_chart(model) }}
+  {% elif model.kind == 'composition' %}{{ composition_chart(model) }}
+  {% elif model.kind == 'donut' %}{{ donut_chart(model) }}
+  {% endif %}
+{% endmacro %}

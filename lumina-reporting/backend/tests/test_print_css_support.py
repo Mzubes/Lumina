@@ -72,3 +72,58 @@ def test_box_shadow_paints_but_only_outside_the_box():
     image = html_to_image(PAGE + markup)
     assert 0.3 < ink_ratio(image) < 0.8
     assert close_to(dominant_colour(image), hex_to_rgb(TEAL))
+
+
+# ---------------------------------------------------------------------------
+# Pagination
+#
+# Colour failures are silent; pagination failures are worse -- a rule the
+# engine ignores leaves a chart stranded on the wrong page under the wrong
+# heading, and the document still looks plausible. Both facts below are
+# relied on by report.html, so both are probed rather than assumed.
+# ---------------------------------------------------------------------------
+
+PAGE_BREAK_CASE = (
+    '<style>@page{size:60mm 40mm;margin:2mm}body{margin:0}'
+    '.a{{height:20mm;background:#0d6b5f}}.b{{height:10mm;background:#c9bd9a}}'
+    '.c{{height:10mm;background:#0d6b5f;{rule}}}</style>'
+    '<div class="a"></div><div class="b"></div><div class="c"></div>'
+)
+
+
+def _page_inks(rule):
+    from tests.print_testing import pdf_to_images
+    from weasyprint import HTML
+    document = PAGE_BREAK_CASE.replace('{rule}', rule)
+    return [round(ink_ratio(page), 2) for page in pdf_to_images(HTML(string=document).write_pdf())]
+
+
+def test_break_before_avoid_is_honoured():
+    """report.html uses it to keep a chart with the table it belongs to.
+
+    The content box holds 36mm; the blocks are 20 + 10 + 10. Left alone the
+    engine fills page one with the first two. Honouring the rule, the middle
+    block has to travel with the third.
+    """
+    assert _page_inks('') == [0.69, 0.23]
+    assert _page_inks('break-before:avoid') == [0.46, 0.46]
+
+
+def test_break_inside_avoid_degrades_instead_of_clipping():
+    """report.html puts it on every section so a short one stays whole. A
+    section taller than a page must still break normally -- if the engine
+    clipped instead, rows would vanish from a client's statement with no
+    error anywhere."""
+    import io
+
+    from pypdf import PdfReader
+    from weasyprint import HTML
+
+    rows = ''.join(f'<tr><td>Row {index}</td></tr>' for index in range(1, 61))
+    document = ('<style>@page{size:60mm 40mm;margin:2mm}section{break-inside:avoid}'
+                'table{width:100%;font-size:5pt}</style>'
+                f'<section><table>{rows}</table></section>')
+    pdf = HTML(string=document).write_pdf()
+    text = ''.join(page.extract_text() for page in PdfReader(io.BytesIO(pdf)).pages)
+    assert len(PdfReader(io.BytesIO(pdf)).pages) > 1
+    assert [index for index in range(1, 61) if f'Row {index}' not in text] == []

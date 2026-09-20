@@ -36,10 +36,17 @@ from tests.print_testing import (ENVIRONMENT_REFERENCE, GOLDEN_DIR, content_to_i
 FIXTURES = sorted(GOLDEN_DIR.glob('*.json'))
 REGENERATE = os.environ.get('REGENERATE_GOLDEN') == '1'
 
-# A page is 120x170 fingerprint cells. 1% is ~200 cells -- far more than
-# rasteriser rounding moves, far less than any visible change. Measured
-# against real perturbations in test_the_tolerance_is_tight_enough below.
-TOLERANCE = 0.01
+# A page is 120x170 fingerprint cells, so 0.5% is ~100 cells. An unchanged
+# render scores 0.00% -- the environment canary below is what makes that
+# safe to rely on, because it skips rather than fails on a machine whose
+# text layout differs. Measured against real perturbations in
+# test_the_tolerance_is_tight_enough below; the smallest change worth
+# catching (one table row) scores 1.4%, so this sits at under half of it.
+#
+# It was 1% until keep-together landed: sections stopped reflowing each
+# other, which shrank the blast radius of a small edit from 3.9% to 1.4%
+# and left too little headroom.
+TOLERANCE = 0.005
 
 
 def _reference_path(name, page):

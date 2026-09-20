@@ -1,3 +1,4 @@
+{% import 'charts.html' as charts %}
 {#
   The document. One Jinja template, one stylesheet, no JavaScript.
 
@@ -42,6 +43,13 @@
   .doc-rule { height: 2pt; background: {{ theme.accent }}; margin: 0 0 7mm; }
 
   .component { margin-bottom: 8mm; }
+  /* Keep-together, but ONLY for a section short enough to fit. Applying it
+     to every section costs a page each time: the engine first tries to
+     honour it by pushing an over-tall section to a fresh page, then gives
+     up and breaks it anyway, leaving the page before it blank. Measured --
+     the 60-row fixture opened with a page at 1% ink. The renderer decides
+     which sections qualify; see _is_compact(). */
+  .component-compact { break-inside: avoid; }
   /* Keep a section's heading with at least the start of its content -- a
      title stranded alone at the foot of a page is the classic giveaway
      that a document was generated rather than typeset. */
@@ -72,18 +80,52 @@
   .person-name { font-weight: 700; color: {{ theme.primary }}; }
   .person-meta { color: {{ theme.muted }}; font-size: 7.5pt; }
 
-  /* CSS bar chart -- the same technique the app's own BarChart uses, which
-     is pure HTML/CSS with zero SVG. Vector, crisp at any DPI, themed. */
+  /* Charts. Ports of the app's own components -- pure HTML/CSS for bars
+     and the composition track, static SVG for the ring. Vector at any DPI,
+     no library, no rasterised figure. Geometry comes from
+     renderers/charts.py; nothing here computes a scale. */
   .chart { margin-top: 3mm; break-inside: avoid; }
+  /* Keeps a chart with the table it belongs to. Verified honoured: without
+     it the ring for one section stranded itself at the top of the next
+     page, arriving under the previous section's heading. */
+  .chart { break-before: avoid; }
   .chart-row { display: grid; grid-template-columns: 34mm 1fr; gap: 2.5mm;
                align-items: center; margin-bottom: 1.6mm; }
   .chart-label { font-size: 7.5pt; color: {{ theme.ink }}; }
-  .chart-bars { display: flex; flex-direction: column; gap: .8mm; }
-  .chart-bar { height: 2.4mm; border-radius: 1.2mm; }
-  .chart-bar-a { background: {{ theme.primary }}; }
-  .chart-bar-b { background: {{ theme.accent_bar_light }}; }
-  .chart-legend { display: flex; gap: 5mm; font-size: 7pt;
+  .chart-bars { display: flex; flex-direction: column; gap: 0.5mm; }
+  /* The bar and its direct label share a row. The label is what replaces
+     the screen component's hover tooltip -- on paper there is nowhere else
+     for the value to live. */
+  .chart-bar-line { display: flex; align-items: center; gap: 1.5mm; }
+  /* Diverging layout: two equal halves either side of a zero line, each
+     bar hugging the line and growing outward. The zero line is the rule
+     between them. */
+  .chart-bar-signed { gap: 0; }
+  .chart-side { flex: 1 1 0; min-width: 0; display: flex;
+                align-items: center; gap: 1.5mm; }
+  .chart-side-neg { justify-content: flex-end;
+                    border-right: .5pt solid {{ theme.rule }}; padding-right: 1mm; }
+  .chart-side-pos { padding-left: 1mm; }
+  .chart-bar { height: 2.4mm; border-radius: 1mm; display: inline-block; }
+  .chart-value { font-size: 7pt; color: {{ theme.muted }};
+                 font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+  /* Single stacked track. flex-grow keeps the segments summing to exactly
+     the track width however the percentages round; the surface-coloured
+     gap separates touching fills without a border. */
+  .chart-track { display: flex; height: 5mm; border-radius: 1mm;
+                 overflow: hidden; gap: 0.5mm; }
+  .chart-segment { display: block; }
+
+  .chart-donut { display: grid; grid-template-columns: 38mm 1fr;
+                 gap: 4mm; align-items: center; }
+  .chart-donut-legend .chart-legend { display: flex; flex-direction: column;
+                                      gap: 1.2mm; margin-top: 0; }
+
+  /* Always present for two or more series: identity is never colour alone. */
+  .chart-legend { display: flex; flex-wrap: wrap; gap: 2mm 5mm; font-size: 7pt;
                   color: {{ theme.muted }}; margin-top: 2mm; }
+  .chart-legend-item { white-space: nowrap; }
   .chart-swatch { display: inline-block; width: 2.4mm; height: 2.4mm;
                   border-radius: .6mm; margin-right: 1.2mm; }
 
@@ -99,7 +141,7 @@
 <div class="doc-rule"></div>
 
 {% for component in components %}
-  <section class="component">
+  <section class="component{{ ' component-compact' if component.compact }}">
     {% if component.title %}<h2>{{ component.title }}</h2>{% endif %}
 
     {% if component.type == 'text_block' %}
@@ -136,27 +178,11 @@
             {% endfor %}
           </tbody>
         </table>
-      {% else %}
+      {% elif not component.chart %}
         <p class="empty">No data on file for this section.</p>
       {% endif %}
 
-      {% if component.bar_series %}
-        <div class="chart">
-          {% for item in component.bar_series %}
-            <div class="chart-row">
-              <span class="chart-label">{{ item.label }}</span>
-              <div class="chart-bars">
-                <div class="chart-bar chart-bar-a" style="width: {{ '%.1f' | format(item.a_pct) }}%"></div>
-                <div class="chart-bar chart-bar-b" style="width: {{ '%.1f' | format(item.b_pct) }}%"></div>
-              </div>
-            </div>
-          {% endfor %}
-          <div class="chart-legend">
-            <span><span class="chart-swatch chart-bar-a"></span>{{ component.columns[1] }}</span>
-            <span><span class="chart-swatch chart-bar-b"></span>{{ component.columns[2] }}</span>
-          </div>
-        </div>
-      {% endif %}
+      {{ charts.chart(component.chart) }}
 
     {% else %}
       <p class="empty">Nothing to display.</p>

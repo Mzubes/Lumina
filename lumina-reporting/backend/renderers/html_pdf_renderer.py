@@ -28,6 +28,8 @@ import html
 from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
+
+from renderers.charts import build_chart
 from weasyprint import HTML
 
 TEMPLATE_DIR = Path(__file__).parent / 'templates'
@@ -157,32 +159,48 @@ def _format_cell(value):
     return str(value)
 
 
-def _bar_rows(columns, rows, theme):
-    """A CSS bar chart for a comparison table -- no library, no image.
+# A4 less the page margins leaves ~245mm of content. These are the rendered
+# heights of the pieces a section is made of, measured from the stylesheet
+# above rather than guessed.
+CONTENT_HEIGHT_MM = 245
+SECTION_HEADING_MM = 12
+TABLE_HEADER_MM = 9
+TABLE_ROW_MM = 5.6
+CHART_ROW_MM = 7.0
+CHART_CHROME_MM = 12
+DONUT_MM = 38
 
-    The app's own BarChart component is already pure HTML/CSS with zero SVG
-    elements, so print reuses the same technique rather than rasterising a
-    matplotlib figure. Vector, crisp at any DPI, and it inherits the theme.
+
+def _estimated_height_mm(component, chart):
+    """Roughly how tall a section will render.
+
+    Rough is enough: it only decides whether a section is short enough to
+    ask the engine to keep together, and the threshold below leaves a wide
+    margin for being wrong.
     """
-    if len(columns) < 3:
-        return []
-    series = []
-    for row in rows:
-        if len(row) < 3:
-            continue
-        # Goes through to_number so a pre-formatted "22%" charts correctly
-        # rather than being silently skipped.
-        first, second = to_number(row[1]), to_number(row[2])
-        if first is None or second is None:
-            continue
-        series.append({'label': str(row[0]), 'a': first, 'b': second})
-    if not series:
-        return []
-    peak = max(max(abs(item['a']), abs(item['b'])) for item in series) or 1
-    for item in series:
-        item['a_pct'] = min(abs(item['a']) / peak * 100, 100)
-        item['b_pct'] = min(abs(item['b']) / peak * 100, 100)
-    return series
+    height = SECTION_HEADING_MM if component.get('title') else 0
+    rows = component.get('rows') or []
+    if component.get('columns') and rows:
+        height += TABLE_HEADER_MM + TABLE_ROW_MM * len(rows)
+    if chart:
+        if chart['kind'] == 'donut':
+            height += DONUT_MM
+        elif chart['kind'] == 'composition':
+            height += CHART_CHROME_MM + CHART_ROW_MM
+        else:
+            height += CHART_CHROME_MM + CHART_ROW_MM * len(chart['rows'])
+    return height
+
+
+def _is_compact(component, chart):
+    """Whether to ask the engine to keep this section on one page.
+
+    Half a page, not a whole one: a section that only just fits would be
+    pushed to a fresh page whenever it lands mid-page, which trades an ugly
+    break for a half-empty page. Below half, the move is nearly always the
+    right one.
+    """
+    return _estimated_height_mm(component, chart) <= CONTENT_HEIGHT_MM / 2
 
 
 def _prepare(content):
@@ -202,8 +220,13 @@ def _prepare(content):
             prepared['formatted_rows'] = [
                 [_format_cell(cell) for cell in row] for row in rows
             ]
-        if component.get('chart_type') == 'bar_comparison':
-            prepared['bar_series'] = _bar_rows(columns, rows, theme)
+        # Chart colours come from the brand kit's validated categorical
+        # palette, never from the template's theme: a theme colour is one
+        # hue, and a chart needs a set that separates under colour-vision
+        # deficiency. See renderers/chart_palette.py.
+        prepared['chart'] = build_chart(component, to_number, _format_cell,
+                                        content.get('brand_colors'))
+        prepared['compact'] = _is_compact(component, prepared['chart'])
         components.append(prepared)
     return theme, components
 
