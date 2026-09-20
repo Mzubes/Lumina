@@ -33,7 +33,9 @@ from tests.print_testing import (ENVIRONMENT_REFERENCE, GOLDEN_DIR, content_to_i
                                  environment_fingerprint, environment_matches_references,
                                  fingerprint, fingerprint_difference)
 
-FIXTURES = sorted(GOLDEN_DIR.glob('*.json'))
+# content_streams.json is the Phase D baseline, not a document fixture.
+FIXTURES = sorted(path for path in GOLDEN_DIR.glob('*.json')
+                  if path.stem != 'content_streams')
 REGENERATE = os.environ.get('REGENERATE_GOLDEN') == '1'
 
 # A page is 120x170 fingerprint cells, so 0.5% is ~100 cells. An unchanged

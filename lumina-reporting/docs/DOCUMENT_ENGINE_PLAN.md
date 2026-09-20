@@ -228,41 +228,71 @@ shrank the blast radius of a small edit from 3.9% to 1.4%.
 
 ---
 
-### D · Template model v2 — sections and elements · ~1.5 weeks
+### D · Template model v2 — sections and elements · ~1.5 weeks · **SCHEMA + ADAPTER SHIPPED**
 
 **Goal:** the Coric-shaped model, expressed in the schema.
 
 ```
-ReportTemplate
+DocumentTemplate
   └─ TemplateSection    layout_mode: 'flow' | 'fixed'
-  │                     flow  -> stacks, may iterate a Dataset, breaks across pages
-  │                     fixed -> anchored at page coordinates, does not flow
+  │                     flow  -> stacks, may iterate a DisplaySpec, breaks across pages
+  │                     fixed -> a declared height, contents anchored, may repeat per page
   │                     + page-break rules, orientation, repeat-on-every-page
   └─ TemplateElement    x, y, w, h, z, type, binding, style
-                        absolutely positioned WITHIN its section
-                        text | field | table | chart | image | line | box | page_number
+                        anchored WITHIN its section, in millimetres
+                        text | field | table | chart | image | line | box |
+                        page_number | people_grid
 ```
 
-**Both layout modes, per the decision above.** A "free placement per page"
-design is a `fixed` section covering the page; a flowing factsheet body is a
-`flow` section. One model, both behaviours, and a template mixes them —
-a fixed masthead and footer with a flowing body between them.
+Named `DocumentTemplate`, not `ReportTemplate`: models.py still has a live
+class by that name, and two SQLAlchemy classes sharing a name across two
+registries is a debugging trap for the whole cutover.
 
-**The element model stays renderer-agnostic.** Because PPTX is in scope
-(Phase G), no element may encode HTML-specific semantics. Position, size,
-type, binding and style are abstract; each renderer maps them. A `style`
-value names a brand-kit token, never a CSS declaration. This is now a hard
-constraint rather than good practice — two renderers consume this tree.
+**Millimetres, not pixels.** A document is a physical artefact. mm converts
+cleanly to CSS mm, to PowerPoint's EMU and to PDF points; px bakes in a DPI
+only one of the three shares.
 
-- Both scoped by `firm_id`, both additive to schema_v2
-- `TemplateElement.binding` references a `DatasetField` or a `DisplaySpec`
-- Migration from today's flat component list: each component becomes a
-  section with one full-width element, so nothing breaks
-- Renderer reads sections/elements; absolute positioning inside a band,
-  bands flow down the page
+**The renderer-agnostic rule is enforced, not documented.** `style_token`
+carries a CHECK constraint rejecting anything containing a colon or a
+semicolon — which a CSS declaration always has and a brand-kit token name
+never does. An HTML-only template built by accident would otherwise only
+surface when the PPTX renderer ran in Phase G, which is far too late.
 
-**Verification:** migrate the seeded Pzena template, render, confirm
-byte-comparable output to Phase A.
+Three more constraints carry design decisions rather than hygiene, each
+proven by letting the database reject the row:
+
+- a fixed band declares a height and a flow band does not — that is what
+  the two words mean;
+- only a fixed band may repeat, because a band whose height is its
+  content's cannot be drawn identically on every page;
+- only a flow band may iterate a spec, because N rows means N bands and a
+  height that is not knowable in advance.
+
+**`renderers/layout.py` is the cutover seam.** It turns either model into
+one tree, and the renderer reads nothing else. Today's flat list becomes
+one flow band per component holding one full-width element — two when a
+table also charts its rows, in the same band so a page break can never
+separate them. An unrecognised component yields an empty band rather than
+a guess.
+
+**Verification — and a correction to how it was specified.** The plan asked
+for byte-comparable output. Whole-file PDF bytes turned out to be the wrong
+instrument: the file is Flate-compressed, so insignificant whitespace in the
+generated HTML — which reordering a Jinja block inevitably causes —
+reshuffles most of the file while drawing an identical page. Chasing that
+would have meant contorting the template to reproduce the old one's blank
+lines, permanently, to satisfy a proxy.
+
+Measured instead on the **uncompressed page content streams**, which are
+the drawing itself: insensitive to how the file was packed, exactly
+sensitive to what landed where. **All four golden fixtures, every page,
+byte-identical to the pre-Phase-D renderer**, and every rendered page
+fingerprint differs by 0.0000%. The baseline is committed
+(`tests/golden/content_streams.json`) so the invariant holds going forward.
+
+**Still to do in D:** a resolver that fills `content` for a v2 template's
+bindings, and the renderer's fixed-band path (anchored elements inside a
+declared-height band). The tree and the schema both already describe them.
 
 ---
 

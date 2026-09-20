@@ -30,6 +30,7 @@ from pathlib import Path
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from renderers.charts import build_chart
+from renderers.layout import layout_from_components
 from weasyprint import HTML
 
 TEMPLATE_DIR = Path(__file__).parent / 'templates'
@@ -235,7 +236,15 @@ def _prepare(content):
                                         content.get('brand_colors'), theme)
         prepared['compact'] = _is_compact(component, prepared['chart'])
         components.append(prepared)
-    return theme, components
+
+    # Everything below the renderer reads the layout tree, never the flat
+    # list -- see renderers/layout.py. The legacy path produces a tree that
+    # renders byte-identically to what the flat list produced, which is what
+    # makes the v2 cutover checkable on real documents.
+    sections = layout_from_components(components)
+    for section, component in zip(sections, components):
+        section['compact'] = component['compact']
+    return theme, sections
 
 
 def _environment():
@@ -251,11 +260,11 @@ def render_document_html(content):
     """The HTML a PDF is made from. Exposed separately so the canvas's live
     preview and the golden-render tests can read exactly what the PDF sees,
     rather than a lookalike."""
-    theme, components = _prepare(content)
+    theme, sections = _prepare(content)
     template = _environment().get_template('report.html')
     return template.render(
         content=content,
-        components=components,
+        sections=sections,
         theme=theme,
         header=content.get('header_config') or {},
         footer=content.get('footer_config') or {},

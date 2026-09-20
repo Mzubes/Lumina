@@ -25,6 +25,7 @@ from .governance import DataLoad, DataSource  # noqa: F401
 from .reporting import ReportDataBinding, ReportSnapshot  # noqa: F401
 from .datasets import Dataset, DatasetField, DatasetRow, DisplaySpec  # noqa: F401
 from .branding import BrandKit  # noqa: F401
+from .templates import DocumentTemplate, TemplateElement, TemplateSection  # noqa: F401
 
 __all__ = [
     'Base', 'metadata',
@@ -38,4 +39,5 @@ __all__ = [
     'ReportSnapshot', 'ReportDataBinding',
     'Dataset', 'DatasetField', 'DisplaySpec', 'DatasetRow',
     'BrandKit',
+    'DocumentTemplate', 'TemplateSection', 'TemplateElement',
 ]

@@ -145,14 +145,20 @@
 </p>
 <div class="doc-rule"></div>
 
-{% for component in components %}
-  <section class="component{{ ' component-compact' if component.compact }}">
-    {% if component.title %}<h2>{{ component.title }}</h2>{% endif %}
+{# The renderer draws the layout tree, never the flat component list --
+   see renderers/layout.py. A legacy template yields one flow band per
+   component, each holding one full-width element (two, when a table also
+   charts its rows), which is what the flat list always meant. #}
+{% for section in sections %}
+  <section class="component{{ ' component-compact' if section.compact }}">
+    {% if section.name %}<h2>{{ section.name }}</h2>{% endif %}
 
-    {% if component.type == 'text_block' %}
+    {%- for element in section.elements %}
+      {%- set component = element.content %}
+      {% if element.element_type == 'text' %}
       <div class="text-block">{{ component.text }}</div>
 
-    {% elif component.type == 'people_grid' %}
+    {% elif element.element_type == 'people_grid' %}
       <div class="people">
         {% for person in component.people or [] %}
           <div class="person">
@@ -163,7 +169,7 @@
         {% endfor %}
       </div>
 
-    {% elif component.columns %}
+    {% elif element.element_type == 'table' %}
       {% if component.rows %}
         <table>
           <thead>
@@ -187,10 +193,13 @@
         <p class="empty">No data on file for this section.</p>
       {% endif %}
 
+    {% elif element.element_type == 'chart' %}
       {{ charts.chart(component.chart) }}
-
-    {% else %}
-      <p class="empty">Nothing to display.</p>
     {% endif %}
+    {%- endfor %}
+
+    {%- if not section.elements %}
+      <p class="empty">Nothing to display.</p>
+    {%- endif %}
   </section>
 {% endfor %}
