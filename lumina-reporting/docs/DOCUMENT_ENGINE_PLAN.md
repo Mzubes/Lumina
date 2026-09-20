@@ -144,7 +144,7 @@ was a dependency of nothing — CI would have failed on import.
 
 ---
 
-### C · Server-side chart pipeline · ~1 week · **TIER 1 SHIPPED**
+### C · Server-side chart pipeline · ~1 week · **SHIPPED**
 
 **Goal:** vector charts in print, from one definition.
 
@@ -155,20 +155,48 @@ Three tiers, in order of preference:
    SVG. All four render in WeasyPrint natively. Port their markup+CSS into
    the Jinja component templates — no library. **Done** (`renderers/charts.py`,
    `renderers/templates/charts.html`): bars, composition and ring.
-2. **Vega-Lite via `vl-convert-python`** for anything needing computed axes,
-   scales or legends — the line/area trend forms. Pure Rust, no Node, no
-   browser. A spec is JSON, so a chart definition is a value a `DisplaySpec`
-   can hold. Wheel confirmed available (33.5 MB, `cp37-abi3` manylinux).
-   **Not yet built.**
+2. **Vega-Lite via `vl-convert-python`** for the trend forms that need a
+   computed axis. **Done** (`renderers/vega_charts.py`). Pure Rust, no Node,
+   no browser; ~25ms steady state, so rendering stays synchronous. The spec
+   is themed to the document — its font, its muted ink, hairline rules — so
+   a chart does not read as something pasted in from another program.
 3. matplotlib (already a dependency) as the escape hatch.
 
-**The palette (C1).** Print does *not* inherit the screen's `--cat-1..6`.
-Against paper white that order fails the normal-vision floor — magenta and
-red adjacent at ΔE 13.2, under the floor of 15. All 120 re-orderings of
-those six hues were enumerated against the validator and none clears every
-gate, so print uses the full validated eight-hue reference set instead.
-The screen palette is unchanged and the divergence is pinned by a test;
-fixing it means changing hues, not order, which is a design decision.
+**Two more defects, also found by looking (C3):**
+
+- **The x-axis sorted itself alphabetically.** Vega orders an ordinal
+  domain by value unless told otherwise, so a growth-of-$100 chart came
+  out Apr, Aug, Dec, Feb, Jan, Jul, Jun… — a plausible-looking picture of
+  nonsense, with nothing but the axis to give it away. Fixed with
+  `sort: None`, and pinned by reading the label order back out of the
+  rendered SVG.
+- **An indexed series asked for as an area rendered flat.** An area fill
+  encodes magnitude measured from the baseline, so Vega correctly forces
+  that baseline to zero — which crushes a 100→119 series into a straight
+  line at the top of an empty plot. The fill is not what that chart is
+  about, so a series that never approaches zero now becomes a line with a
+  truncated axis. A series that does reach or cross zero keeps both.
+
+The tier-2 SVG is inlined into the document unescaped, which is only safe
+because `vl_convert` escapes every data-derived string into SVG text — a
+label of `</text></svg><script>` comes back escaped, not as markup. That
+is pinned by a test, because report labels arrive from a warehouse.
+
+**The palette (C1) — the measurement stands, my conclusion from it did
+not.** The shipped `--cat-1..6` order fails the normal-vision floor:
+magenta and red adjacent at ΔE 13.2, under the floor of 15. All 120
+re-orderings of those six hues were enumerated against the validator and
+none clears every gate, so the repair is the two missing hues (yellow,
+green), not a re-shuffle.
+
+I first read this as a print/screen divergence and shipped two palettes.
+That was wrong: screen charts sit on `--panel-bg`, which is `#ffffff` —
+the same ground as paper. There was never a reason for two. `styles.css`
+now carries the same validated eight in the same order, pinned by a test
+that reads the stylesheet from the backend, and the frontend's four
+duplicated copies of the colour list are one module. Fixing it also
+turned up `CATEGORICAL_COLORS[index % length]`, which handed the ninth
+series the first one's hue.
 
 `renderers/color_science.py` ports the validator's arithmetic into Python
 so a brand kit's own `chart_series` can be checked where it is used — node

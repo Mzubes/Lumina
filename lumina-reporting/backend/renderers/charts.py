@@ -40,7 +40,11 @@ DONUT_CIRCUMFERENCE = 2 * math.pi * DONUT_RADIUS
 
 # The forms this tier draws. `bar_comparison` is the vocabulary the existing
 # templates already use, kept so Phase A's documents keep rendering.
-KINDS = ('bar', 'bar_comparison', 'composition', 'donut')
+KINDS = ('bar', 'bar_comparison', 'composition', 'donut', 'line', 'area')
+
+# The forms that need a computed axis go to tier 2 (Vega-Lite). Everything
+# else is drawn from geometry here.
+AXIS_KINDS = ('line', 'area')
 
 
 def _series_rows(columns, rows, to_number, format_cell):
@@ -146,7 +150,7 @@ def _donut_segments(shares):
     return segments
 
 
-def build_chart(component, to_number, format_cell, brand_colors=None):
+def build_chart(component, to_number, format_cell, brand_colors=None, theme=None):
     """A drawable model, or None when there is nothing to draw.
 
     Returning None rather than an empty chart matters: a titled section with
@@ -165,6 +169,26 @@ def build_chart(component, to_number, format_cell, brand_colors=None):
     parsed = _series_rows(columns, rows, to_number, format_cell)
     if not parsed:
         return None
+
+    if kind in AXIS_KINDS:
+        # Imported here rather than at module scope: vl_convert is a 30MB
+        # binary, and a document with no trend chart in it should not pay
+        # to load it.
+        from renderers.vega_charts import build_spec, render_svg
+        series_names = list(columns[1:])
+        try:
+            spec = build_spec(kind, columns[0], series_names,
+                              [(label, values) for label, values, _ in parsed],
+                              theme or {'muted': '#6b6b6b', 'rule': '#dcdcdc'},
+                              brand_colors)
+        except ValueError:
+            # More series than the palette validates for. A trend chart
+            # cannot fold a series into "Other" the way a part-to-whole
+            # chart can -- summing two price series is meaningless -- so
+            # the honest outcome is no chart, and the table below it still
+            # carries every number.
+            return None
+        return {'kind': 'vega', 'svg': render_svg(spec)}
 
     if kind in ('composition', 'donut'):
         # One series only: a part-to-whole form has one whole.

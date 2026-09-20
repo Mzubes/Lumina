@@ -94,9 +94,18 @@
   </div>
 {% endmacro %}
 
+{% macro vega_chart(chart) %}
+  {# Inlined, not linked: the PDF has to be one self-contained file.
+     vl_convert escapes every data-derived string into SVG text, so a
+     label arriving from a warehouse cannot close the element and inject
+     markup -- pinned by test_vega_charts.py. #}
+  <div class="chart chart-vega">{{ chart.svg | safe }}</div>
+{% endmacro %}
+
 {% macro chart(model) %}
   {% if model.kind == 'bar' %}{{ bar_chart(model) }}
   {% elif model.kind == 'composition' %}{{ composition_chart(model) }}
   {% elif model.kind == 'donut' %}{{ donut_chart(model) }}
+  {% elif model.kind == 'vega' %}{{ vega_chart(model) }}
   {% endif %}
 {% endmacro %}

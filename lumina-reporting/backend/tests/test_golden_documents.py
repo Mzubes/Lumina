@@ -107,7 +107,7 @@ def test_the_environment_canary_is_committed():
 def test_fixtures_exist():
     """Guards against the glob quietly matching nothing, which would make
     the parametrised test below collect zero cases and pass."""
-    assert [path.stem for path in FIXTURES] == ['edge_cases', 'factsheet', 'long_table']
+    assert [path.stem for path in FIXTURES] == ['edge_cases', 'factsheet', 'long_table', 'trend']
 
 
 @pytest.mark.parametrize('path', FIXTURES, ids=lambda path: path.stem)

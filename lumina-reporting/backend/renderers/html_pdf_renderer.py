@@ -169,6 +169,8 @@ TABLE_ROW_MM = 5.6
 CHART_ROW_MM = 7.0
 CHART_CHROME_MM = 12
 DONUT_MM = 38
+# vega_charts.CHART_HEIGHT is 190 CSS px, which is 190/96 inches.
+VEGA_MM = 51
 
 
 def _estimated_height_mm(component, chart):
@@ -183,10 +185,15 @@ def _estimated_height_mm(component, chart):
     if component.get('columns') and rows:
         height += TABLE_HEADER_MM + TABLE_ROW_MM * len(rows)
     if chart:
+        # Branching on the kind explicitly rather than falling through to a
+        # row count: a tier-2 chart is one fixed-height SVG and has no rows
+        # at all, which used to raise here.
         if chart['kind'] == 'donut':
             height += DONUT_MM
         elif chart['kind'] == 'composition':
             height += CHART_CHROME_MM + CHART_ROW_MM
+        elif chart['kind'] == 'vega':
+            height += CHART_CHROME_MM + VEGA_MM
         else:
             height += CHART_CHROME_MM + CHART_ROW_MM * len(chart['rows'])
     return height
@@ -225,7 +232,7 @@ def _prepare(content):
         # hue, and a chart needs a set that separates under colour-vision
         # deficiency. See renderers/chart_palette.py.
         prepared['chart'] = build_chart(component, to_number, _format_cell,
-                                        content.get('brand_colors'))
+                                        content.get('brand_colors'), theme)
         prepared['compact'] = _is_compact(component, prepared['chart'])
         components.append(prepared)
     return theme, components

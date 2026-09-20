@@ -117,6 +117,11 @@
                  overflow: hidden; gap: 0.5mm; }
   .chart-segment { display: block; }
 
+  /* The SVG is authored at the content width; this lets it scale down
+     if the box is narrower, without an aspect-ratio (which WeasyPrint
+     drops silently). */
+  .chart-vega svg { max-width: 100%; height: auto; }
+
   .chart-donut { display: grid; grid-template-columns: 38mm 1fr;
                  gap: 4mm; align-items: center; }
   .chart-donut-legend .chart-legend { display: flex; flex-direction: column;
