@@ -18,6 +18,8 @@ model instances -- so a render needs no database and a unit test needs no
 fixtures.
 """
 
+import json
+
 from schema_v2.templates import ELEMENT_TYPES, LAYOUT_MODES
 
 # A4 portrait at the default margins. The legacy path has no template row to
@@ -61,6 +63,19 @@ def _element(element_type, component, width_mm, **extra):
         'z_index': 0,
         'binding_kind': 'none',
         'style_token': None,
+        # This element came from the flat component list, not from a
+        # designed template. The renderer needs to know, because a legacy
+        # element's `content` is a whole resolved component (a table with
+        # its columns, a chart) while a v2 element's is one binding's
+        # value. `binding_kind` cannot carry that: a v2 element holding
+        # static words is unbound too, and used to fall down the legacy
+        # branch and render as nothing.
+        'legacy': True,
+        'static_text': None,
+        'binding_key': None,
+        'dataset_field_id': None,
+        'display_spec_id': None,
+        'options': None,
         # The resolved values this element draws. In v2 these arrive through
         # a binding; during cutover they arrive already resolved on the
         # component, and the renderer cannot tell the difference.
@@ -79,6 +94,7 @@ def _section(ordinal, elements, title=None):
         'repeat_mode': 'none',
         'break_before': 'auto',
         'break_after': 'auto',
+        'iterate_display_spec_id': None,
         'elements': elements,
     }
 
@@ -132,6 +148,7 @@ def layout_from_template(template, sections, elements):
             'repeat_mode': section.repeat_mode,
             'break_before': section.break_before,
             'break_after': section.break_after,
+            'iterate_display_spec_id': section.iterate_display_spec_id,
             'elements': [
                 {
                     'element_type': element.element_type,
@@ -140,6 +157,14 @@ def layout_from_template(template, sections, elements):
                     'z_index': element.z_index,
                     'binding_kind': element.binding_kind,
                     'style_token': element.style_token,
+                    # What the binding names. Carried even when unused by
+                    # this element's kind, because the resolver indexes
+                    # them and a tree missing one fails mid-render.
+                    'dataset_field_id': element.dataset_field_id,
+                    'display_spec_id': element.display_spec_id,
+                    'binding_key': element.binding_key,
+                    'static_text': element.static_text,
+                    'options': json.loads(element.options) if element.options else None,
                     # Filled by the resolver, not here: this module maps
                     # structure, never data.
                     'content': None,

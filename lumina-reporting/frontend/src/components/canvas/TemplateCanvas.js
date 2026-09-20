@@ -1,18 +1,28 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { ORIENTATIONS, PAGE_SIZES, ZOOM_STEPS, contentBox } from '../../paper';
+import {
+  createTemplate, isDemoMode, listTemplates, loadTemplate, newVersion,
+  publishTemplate, saveTemplate, toApiTemplate,
+} from '../../templateApi';
 import CanvasElement, { ELEMENT_LABELS } from './CanvasElement';
 import DEMO_TEMPLATE from './demoTemplate';
 import PageSurface from './PageSurface';
 import useTemplateEditor from './useTemplateEditor';
 
-// E1: the page surface. Bands stack down the content box in ordinal order;
-// a fixed band takes its declared height, a flow band takes the height its
-// contents need. Elements sit inside their band, anchored in millimetres.
+// The page surface (E1) with direct manipulation (E2), over the template
+// API. Bands stack down the content box in ordinal order; a fixed band
+// takes its declared height, a flow band takes the height its contents
+// need. Elements sit inside their band, anchored in millimetres.
 //
-// What this does NOT do yet is E2: nothing is draggable, and selection is
-// the only interaction. That is deliberate -- the surface has to be right
-// in the unit that matters before anything moves on it.
+// **A save replaces the tree.** The API does not diff, so it hands back new
+// row ids and this loads the response rather than keeping what was on
+// screen. That is what makes "what I see" and "what was stored" the same
+// thing after every save, including when the server normalised something.
+//
+// Demo mode (no API configured) keeps the worked example in component
+// state and hides the save controls, so the canvas is still reviewable
+// without a backend.
 
 const bandHeightMm = (section) => {
   if (section.layout_mode === 'fixed') return section.height_mm;
@@ -21,12 +31,77 @@ const bandHeightMm = (section) => {
   return Math.max(12, ...section.elements.map(el => el.y_mm + el.h_mm));
 };
 
+// What the server holds, as a comparable string. Built from the same
+// converter the save uses, so "dirty" means "a save would change
+// something" rather than "some object identity changed".
+const fingerprint = (template) => JSON.stringify(toApiTemplate(template));
+
 const TemplateCanvas = () => {
   const editor = useTemplateEditor(DEMO_TEMPLATE);
-  const { template, setTemplate, selection, select, setSelection } = editor;
+  const { template, setTemplate, load, selection, select, setSelection } = editor;
   const [zoom, setZoom] = useState(1);
   const [guides, setGuides] = useState({ x: null, y: null });
   const drag = useRef(null);
+
+  const [catalogue, setCatalogue] = useState([]);
+  const [saved, setSaved] = useState(null);
+  const [busy, setBusy] = useState(!isDemoMode);
+  const [error, setError] = useState('');
+
+  const adopt = useCallback((loaded) => {
+    load(loaded);
+    setSaved(fingerprint(loaded));
+  }, [load]);
+
+  const open = useCallback(async (id) => {
+    setBusy(true);
+    setError('');
+    try {
+      adopt(await loadTemplate(id));
+    } catch (failure) {
+      setError(failure.message);
+    } finally {
+      setBusy(false);
+    }
+  }, [adopt]);
+
+  useEffect(() => {
+    if (isDemoMode) return undefined;
+    let cancelled = false;
+    (async () => {
+      try {
+        const list = await listTemplates();
+        if (cancelled) return;
+        setCatalogue(list);
+        if (list.length) adopt(await loadTemplate(list[0].id));
+      } catch (failure) {
+        if (!cancelled) setError(failure.message);
+      } finally {
+        if (!cancelled) setBusy(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [adopt]);
+
+  // `saved === null` means nothing has been stored yet -- an unsaved worked
+  // example, which is dirty by definition.
+  const dirty = !isDemoMode && (saved === null || saved !== fingerprint(template));
+
+  const run = useCallback(async (work) => {
+    setBusy(true);
+    setError('');
+    try {
+      adopt(await work());
+      setCatalogue(await listTemplates());
+    } catch (failure) {
+      setError(failure.message);
+    } finally {
+      setBusy(false);
+    }
+  }, [adopt]);
+
+  const onSave = () => run(() => (
+    template.id ? saveTemplate(template.id, template) : createTemplate(template)));
 
   // One pointer gesture, from press to release. Pointer capture keeps the
   // drag alive when the cursor leaves the element -- without it a fast
@@ -118,9 +193,14 @@ const TemplateCanvas = () => {
     <div className="page">
       <h1>Template canvas</h1>
       <p className="panel-subtitle">
-        {template.name} · {PAGE_SIZES[template.page.size].label} {template.page.orientation}
+        {template.name}
+        {template.version ? ` · v${template.version}` : ''}
+        {' · '}{PAGE_SIZES[template.page.size].label} {template.page.orientation}
         {' · '}content area {content.width}×{content.height}mm
+        {isDemoMode && ' · demo data, nothing is saved'}
       </p>
+
+      {error && <p className="alert-banner" role="alert">{error}</p>}
 
       <div className="canvas-toolbar">
         <label>
@@ -148,6 +228,20 @@ const TemplateCanvas = () => {
             ))}
           </select>
         </label>
+        {!isDemoMode && catalogue.length > 0 && (
+          <label>
+            Template
+            <select value={template.id || ''} disabled={busy}
+                    onChange={(e) => open(Number(e.target.value))}>
+              {!template.id && <option value="">Unsaved draft</option>}
+              {catalogue.map(item => (
+                <option key={item.id} value={item.id}>
+                  {item.name} · v{item.version}{item.is_published ? ' (published)' : ''}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
         <span className="canvas-toolbar-actions">
           <button type="button" onClick={editor.undo} disabled={!editor.canUndo}>Undo</button>
           <button type="button" onClick={editor.redo} disabled={!editor.canRedo}>Redo</button>
@@ -156,6 +250,36 @@ const TemplateCanvas = () => {
           <button type="button" onClick={() => editor.changeOrder('back')}
                   disabled={!selection.length}>Send to back</button>
         </span>
+        {!isDemoMode && (
+          <span className="canvas-toolbar-actions">
+            {template.is_published ? (
+              // A published template is what distributed packs rendered
+              // from, so it is not editable in place -- the only forward
+              // move is a new version.
+              <button type="button" className="btn-primary" disabled={busy}
+                      onClick={() => run(() => newVersion(template.id))}>
+                New version
+              </button>
+            ) : (
+              <>
+                <button type="button" className="btn-primary" disabled={busy || !dirty}
+                        onClick={onSave}>
+                  {template.id ? 'Save' : 'Save as new template'}
+                </button>
+                <button type="button" disabled={busy || dirty || !template.id}
+                        onClick={() => run(() => publishTemplate(template.id))}>
+                  Publish
+                </button>
+              </>
+            )}
+            <span className="panel-subtitle" role="status">
+              {busy ? 'Working…'
+                : template.is_published ? 'Published — read only'
+                : dirty ? 'Unsaved changes'
+                : 'Saved'}
+            </span>
+          </span>
+        )}
         {overflows && (
           <span className="canvas-warning" role="status">
             Bands run past the bottom margin — they would break onto a second page.

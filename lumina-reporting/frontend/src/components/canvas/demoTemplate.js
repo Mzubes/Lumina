@@ -9,6 +9,9 @@
 
 export const DEMO_TEMPLATE = {
   name: 'Monthly Factsheet',
+  // The API keys a template's versions by code, so the worked example
+  // carries one: saving it is a real create, not a special case.
+  code: 'monthly-factsheet',
   page: { size: 'a4', orientation: 'portrait' },
   sections: [
     {

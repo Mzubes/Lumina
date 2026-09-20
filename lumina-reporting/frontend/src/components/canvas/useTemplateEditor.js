@@ -45,6 +45,18 @@ export const useTemplateEditor = (initial) => {
     sync();
   }, []);
 
+  // Replace the whole template and drop the undo stack with it. Used when
+  // a template arrives from the API: the history belongs to the document
+  // that was on screen, and letting Ctrl-Z walk back into a different
+  // template's states would then save one template's bands over another's.
+  const load = useCallback((next) => {
+    past.current = [];
+    future.current = [];
+    sync();
+    setSelection([]);
+    setTemplate(next);
+  }, []);
+
   const bounds = useMemo(() => {
     const box = contentBox(template.page);
     return { width: box.width, height: box.height };
@@ -136,7 +148,7 @@ export const useTemplateEditor = (initial) => {
   }, [patchElements]);
 
   return {
-    template, setTemplate, bounds, elementsById,
+    template, setTemplate, load, bounds, elementsById,
     selection, select, setSelection,
     begin, undo, redo, canUndo: depth.past > 0, canRedo: depth.future > 0,
     gesture, nudgeSelection, changeOrder, setElement, roundMm,

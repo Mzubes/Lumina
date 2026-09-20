@@ -221,11 +221,13 @@
 
     {%- for element in section.elements %}
       {%- set component = element.content %}
-      {#- A bound element carries a resolved binding, not a legacy
-          component, so it draws through the same macros a fixed band
-          uses. binding_kind is the discriminator: the legacy adapter
-          never sets one. -#}
-      {% if element.binding_kind != 'none' %}
+      {#- A v2 element draws through the same macros a fixed band uses;
+          a legacy one carries a whole resolved component and has its own
+          branches below. `legacy` is the discriminator, set only by
+          layout_from_components. binding_kind used to be, and it was
+          wrong: an unbound v2 element -- static words, a rule, a box --
+          fell through to the legacy chain and rendered nothing. -#}
+      {% if not element.legacy %}
       <div class="el el-inline el-{{ element.element_type }}">{{ charts.element_body(element, theme) }}</div>
 
     {% elif element.element_type == 'text' %}

@@ -13,6 +13,7 @@ if BACKEND_DIR not in sys.path:
 
 from config import Config
 import models  # noqa: F401 -- import all models so they register on Base.metadata
+import schema_v2  # noqa: F401 -- the v2 schema keeps its own Base; see target_metadata
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -31,7 +32,11 @@ if config.config_file_name is not None:
 
 # add your model's MetaData object here
 # for 'autogenerate' support
-target_metadata = models.Base.metadata
+# Both schemas. v2 deliberately carries a separate declarative Base so it
+# can be created alongside the live one rather than migrated into it, so
+# autogenerate has to be told about both or it proposes dropping every v2
+# table it finds in the database and cannot see in the model.
+target_metadata = [models.Base.metadata, schema_v2.metadata]
 
 # other values from the config, defined by the needs of env.py,
 # can be acquired:
